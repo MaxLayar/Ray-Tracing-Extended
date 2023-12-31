@@ -1,0 +1,243 @@
+// DDGIRayTracing.compute
+#pragma kernel CSMain
+struct Ray
+{
+    float3 origin;
+    float3 dir;
+};
+
+struct RayTracingMaterial
+{
+    float4 colour;
+    float4 emissionColour;
+    float4 specularColour;
+    float emissionStrength;
+    float smoothness;
+    float specularProbability;
+    int flag;
+};
+
+struct HitInfo
+{
+    bool didHit;
+    float dst;
+    float3 hitPoint;
+    float3 normal;
+    RayTracingMaterial material;
+};
+
+struct Triangle
+{
+    float3 posA, posB, posC;
+    float3 normalA, normalB, normalC;
+};
+
+struct MeshInfo
+{
+    uint firstTriangleIndex;
+    uint numTriangles;
+    RayTracingMaterial material;
+    float3 boundsMin;
+    float3 boundsMax;
+};
+
+// Texture to write to (assuming RGB channels for albedo)
+RWTexture2D<float4> Result;
+uint Frame;
+uint NumRaysPerPixel;
+uint MaxBounceCount;
+float3 DebugRayDir;
+
+// Mesh Scene
+StructuredBuffer<Triangle> Triangles;
+StructuredBuffer<MeshInfo> AllMeshInfo;
+int NumMeshes;
+
+// Special material types
+static const int CheckerPattern = 1;
+static const int InvisibleLightSource = 2;
+
+// PCG (permuted congruential generator). Thanks to:
+// www.pcg-random.org and www.shadertoy.com/view/XlGcRh
+uint NextRandom(inout uint state)
+{
+    state = state * 747796405 + 2891336453;
+    uint result = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
+    result = (result >> 22) ^ result;
+    return result;
+}
+
+float RandomValue(inout uint state)
+{
+    return NextRandom(state) / 4294967295.0; // 2^32 - 1
+}
+
+// Random value in normal distribution (with mean=0 and sd=1)
+float RandomValueNormalDistribution(inout uint state)
+{
+    // Thanks to https://stackoverflow.com/a/6178290
+    float theta = 2 * 3.1415926 * RandomValue(state);
+    float rho = sqrt(-2 * log(RandomValue(state)));
+    return rho * cos(theta);
+}
+
+// Calculate a random direction
+float3 RandomDirection(inout uint state)
+{
+    // Thanks to https://math.stackexchange.com/a/1585996
+    float x = RandomValueNormalDistribution(state);
+    float y = RandomValueNormalDistribution(state);
+    float z = RandomValueNormalDistribution(state);
+    return normalize(float3(x, y, z));
+}
+
+float2 mod2(float2 x, float2 y)
+{
+    return x - y * floor(x/y);
+}
+
+// Thanks to https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
+bool RayBoundingBox(Ray ray, float3 boxMin, float3 boxMax)
+{
+    float3 invDir = 1 / ray.dir;
+    float3 tMin = (boxMin - ray.origin) * invDir;
+    float3 tMax = (boxMax - ray.origin) * invDir;
+    float3 t1 = min(tMin, tMax);
+    float3 t2 = max(tMin, tMax);
+    float tNear = max(max(t1.x, t1.y), t1.z);
+    float tFar = min(min(t2.x, t2.y), t2.z);
+    return tNear <= tFar;
+};
+
+// Calculate the intersection of a ray with a triangle using Möller–Trumbore algorithm
+// Thanks to https://stackoverflow.com/a/42752998
+HitInfo RayTriangle(Ray ray, Triangle tri)
+{
+    float3 edgeAB = tri.posB - tri.posA;
+    float3 edgeAC = tri.posC - tri.posA;
+    float3 normalVector = cross(edgeAB, edgeAC);
+    float3 ao = ray.origin - tri.posA;
+    float3 dao = cross(ao, ray.dir);
+
+    float determinant = -dot(ray.dir, normalVector);
+    float invDet = 1 / determinant;
+    
+    // Calculate dst to triangle & barycentric coordinates of intersection point
+    float dst = dot(ao, normalVector) * invDet;
+    float u = dot(edgeAC, dao) * invDet;
+    float v = -dot(edgeAB, dao) * invDet;
+    float w = 1 - u - v;
+    
+    // Initialize hit info
+    HitInfo hitInfo;
+    hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
+    hitInfo.hitPoint = ray.origin + ray.dir * dst;
+    hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+    hitInfo.dst = dst;
+    return hitInfo;
+}
+
+// Find the first point that the given ray collides with, and return hit info
+HitInfo CalculateRayCollision(Ray ray)
+{
+    HitInfo closestHit = (HitInfo)0;
+    // We haven't hit anything yet, so 'closest' hit is infinitely far away
+    closestHit.dst = 1.#INF;
+
+    // Raycast against all meshes and keep info about the closest hit
+    for (int meshIndex = 0; meshIndex < NumMeshes; meshIndex ++)
+    {
+        MeshInfo meshInfo = AllMeshInfo[meshIndex];
+        if (!RayBoundingBox(ray, meshInfo.boundsMin, meshInfo.boundsMax)) {
+            continue;
+        }
+
+        for (uint i = 0; i < meshInfo.numTriangles; i ++) {
+            int triIndex = meshInfo.firstTriangleIndex + i;
+            Triangle tri = Triangles[triIndex];
+            HitInfo hitInfo = RayTriangle(ray, tri);
+
+            if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+            {
+                closestHit = hitInfo;
+                closestHit.material = meshInfo.material;
+            }
+        }
+    }
+
+    return closestHit;
+}
+
+float3 Trace(Ray ray, inout uint rngState)
+{
+    float3 incomingLight = 0;
+    float3 rayColour = 1;
+
+    for (uint bounceIndex = 0; bounceIndex <= MaxBounceCount; bounceIndex ++)
+    {
+        HitInfo hitInfo = CalculateRayCollision(ray);
+        if (hitInfo.didHit)
+        {
+            RayTracingMaterial material = hitInfo.material;
+            // Handle special material types:
+            if (material.flag == CheckerPattern) 
+            {
+                float2 c = mod2(floor(hitInfo.hitPoint.xz), 2.0);
+                material.colour = c.x == c.y ? material.colour : material.emissionColour;
+            }
+            else if (material.flag == InvisibleLightSource && bounceIndex == 0)
+            {
+                ray.origin = hitInfo.hitPoint + ray.dir * 0.001;
+                continue;
+            }
+
+            // Figure out new ray position and direction
+            bool isSpecularBounce = material.specularProbability >= RandomValue(rngState);
+        
+            ray.origin = hitInfo.hitPoint;
+            float3 diffuseDir = normalize(hitInfo.normal + RandomDirection(rngState));
+            float3 specularDir = reflect(ray.dir, hitInfo.normal);
+            ray.dir = normalize(lerp(diffuseDir, specularDir, material.smoothness * isSpecularBounce));
+
+            // Update light calculations
+            float3 emittedLight = (material.emissionColour * material.emissionStrength).rgb;
+            incomingLight += emittedLight * rayColour;
+            rayColour *= lerp(material.colour, material.specularColour, isSpecularBounce).rgb;
+            
+            // Random early exit if ray colour is nearly 0 (can't contribute much to final result)
+            float p = max(rayColour.r, max(rayColour.g, rayColour.b));
+            if (RandomValue(rngState) >= p) {
+                break;
+            }
+            rayColour *= 1.0f / p; 
+        }
+        // else
+        // {
+        //     incomingLight += GetEnvironmentLight(ray) * rayColour;
+        //     break;
+        // }
+    }
+    return incomingLight;
+}
+
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID) {
+    uint pixelIndex = id.y * id.x + id.x;
+	uint rngState = pixelIndex + Frame * 719393;
+
+    Ray ray;
+    float3 totalIncomingLight = 0;
+
+    for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
+    {	
+        // Calculate ray origin and direction
+        ray.origin = float3(0, 0, 0);
+        ray.dir = normalize(DebugRayDir - ray.origin);
+        // Trace
+        totalIncomingLight += Trace(ray, rngState);
+    }
+
+    float3 pixelCol = totalIncomingLight / NumRaysPerPixel;
+    Result[id.xy] = float4(pixelCol, 1);
+}
