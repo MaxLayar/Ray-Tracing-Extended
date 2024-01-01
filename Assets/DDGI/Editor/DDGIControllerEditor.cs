@@ -39,13 +39,6 @@ public class DDGIControllerEditor : Editor
 
             ddgiController.RefreshProbesPlacement();
         }
-
-        if (ddgiController.isRealtimeRaytracing)
-        {
-            ddgiController.PrepareScene();
-            ddgiController.DispatchDDGIRayTracing();
-            ddgiController.debugFrame++;
-        }
     }
 
 

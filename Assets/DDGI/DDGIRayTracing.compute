@@ -47,6 +47,7 @@ uint Frame;
 uint NumRaysPerPixel;
 uint MaxBounceCount;
 float3 DebugRayDir;
+float BufferDimension;
 
 // Mesh Scene
 StructuredBuffer<Triangle> Triangles;
@@ -220,6 +221,19 @@ float3 Trace(Ray ray, inout uint rngState)
     return incomingLight;
 }
 
+// Returns ±1
+float2 SignNotZero(float2 v) {
+    return float2((v.x >= 0.0) ? +1.0 : -1.0, (v.y >= 0.0) ? +1.0 : -1.0);
+}
+
+// Assume normalized input. Output is on [-1, 1] for each component.
+float2 SphereToOctProjected(float3 v) {
+    // Project the sphere onto the octahedron, and then onto the xy plane
+    float2 p = v.xy * (1.0 / (abs(v.x) + abs(v.y) + abs(v.z)));
+
+    // Reflect the folds of the lower hemisphere over the diagonals
+    return (v.z <= 0.0) ? ((1.0 - abs(p.yx)) * SignNotZero(p)) : p;
+}
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
@@ -229,15 +243,19 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
     Ray ray;
     float3 totalIncomingLight = 0;
 
+    float3 randomDir = RandomDirection(rngState);
+    float2 planarProj = SphereToOctProjected(randomDir);
+    planarProj = (planarProj + 1)/2 * BufferDimension;
+
     for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
     {	
         // Calculate ray origin and direction
         ray.origin = float3(0, 0, 0);
-        ray.dir = normalize(DebugRayDir - ray.origin);
+        ray.dir = normalize(randomDir - ray.origin);
         // Trace
         totalIncomingLight += Trace(ray, rngState);
     }
 
     float3 pixelCol = totalIncomingLight / NumRaysPerPixel;
-    Result[id.xy] = float4(pixelCol, 1);
+    Result[planarProj] = float4(pixelCol, 1);
 }

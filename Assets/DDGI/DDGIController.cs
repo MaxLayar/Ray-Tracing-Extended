@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 
+[ExecuteInEditMode]
 public class DDGIController : MonoBehaviour
 {
     public ComputeShader ddgiComputeShader;
@@ -35,6 +36,17 @@ public class DDGIController : MonoBehaviour
     List<MeshInfo> allMeshInfo;
     int NumMeshes;
 
+    void Update()
+    {
+        
+        if (isRealtimeRaytracing)
+        {
+            PrepareScene();
+            DispatchDDGIRayTracing();
+            debugFrame++;
+        }
+    }
+
     public void DispatchDDGIRayTracing()
     {
         if (!renderTexture)
@@ -53,6 +65,7 @@ public class DDGIController : MonoBehaviour
 
     void SetShaderParams()
 	{
+        ddgiComputeShader.SetFloat("BufferDimension", renderTexture.width);
         ddgiComputeShader.SetInt("MaxBounceCount", maxBounceCount);
         ddgiComputeShader.SetInt("Frame", debugFrame);
         ddgiComputeShader.SetVector("DebugRayDir", debugRayDir);
