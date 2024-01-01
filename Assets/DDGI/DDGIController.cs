@@ -62,7 +62,7 @@ public class DDGIController : MonoBehaviour
         int threadGroupsY = renderTexture.height / 8;
 
         SetShaderParams();
-        ddgiComputeShader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
+        ddgiComputeShader.Dispatch(0, threadGroupsX, threadGroupsY, 2);
     }
 
     void SetShaderParams()
@@ -70,7 +70,7 @@ public class DDGIController : MonoBehaviour
 		CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
         ddgiComputeShader.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
 
-        ddgiComputeShader.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.y, numberOfProbes.z, 0));
+        ddgiComputeShader.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
         ddgiComputeShader.SetInt("BufferDimension", bufferDimension);
         ddgiComputeShader.SetInt("MaxBounceCount", maxBounceCount);
         ddgiComputeShader.SetInt("Frame", debugFrame);
@@ -100,7 +100,6 @@ public class DDGIController : MonoBehaviour
 				RayTracingMaterial material = meshObjects[i].GetMaterial(chunk.subMeshIndex);
 				allMeshInfo.Add(new MeshInfo(allTriangles.Count, chunk.triangles.Length, material, chunk.bounds));
 				allTriangles.AddRange(chunk.triangles);
-
 			}
 		}
 
@@ -143,15 +142,22 @@ public class DDGIController : MonoBehaviour
     {
         Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
 
-        numberOfProbes = new() {
-            x = Mathf.CeilToInt(volume.size.x / minProbesSpacing),
-            y = Mathf.CeilToInt(volume.size.y / minProbesSpacing),
-            z = Mathf.CeilToInt(volume.size.z / minProbesSpacing)
-        };
+        numberOfProbes = new(
+            Mathf.CeilToInt(volume.size.x / minProbesSpacing),
+            Mathf.CeilToInt(volume.size.y / minProbesSpacing),
+            Mathf.CeilToInt(volume.size.z / minProbesSpacing)
+        );
 
-        float spacingX = volume.size.x / (numberOfProbes.x-1);
-        float spacingY = volume.size.y / (numberOfProbes.y-1);
-        float spacingZ = volume.size.z / (numberOfProbes.z-1);
+        Vector3 spacing = new(
+            volume.size.x / (numberOfProbes.x - 1),
+            volume.size.y / (numberOfProbes.y - 1),
+            volume.size.z / (numberOfProbes.z - 1)
+        );
+
+        spacing.x = (float.IsInfinity(spacing.x) || float.IsNaN(spacing.x)) ? 0 : spacing.x;
+        spacing.y = (float.IsInfinity(spacing.y) || float.IsNaN(spacing.y)) ? 0 : spacing.y;
+        spacing.z = (float.IsInfinity(spacing.z) || float.IsNaN(spacing.z)) ? 0 : spacing.z;
+
 
         probesPositions = new Vector3[numberOfProbes.x * numberOfProbes.y * numberOfProbes.z];
 
@@ -159,7 +165,7 @@ public class DDGIController : MonoBehaviour
         for (int x = 0; x < numberOfProbes.x; x++)
             for (int y = 0; y < numberOfProbes.y; y++)
                 for (int z = 0; z < numberOfProbes.z; z++)
-                    probesPositions[idx++] = volume.center - volume.extents + new Vector3(x * spacingX, y * spacingY, z * spacingZ);
+                    probesPositions[idx++] = volume.center - volume.extents + new Vector3(x * spacing.x, y * spacing.y, z * spacing.z);
 
         realProbesSpacing = minProbesSpacing;
 
@@ -171,12 +177,12 @@ public class DDGIController : MonoBehaviour
         if (renderTexture)
             renderTexture.Release();
 
-        renderTexture = new RenderTexture(bufferDimension * numberOfProbes.x * numberOfProbes.z, bufferDimension * numberOfProbes.y, 16);
+        renderTexture = new RenderTexture(bufferDimension * numberOfProbes.x * numberOfProbes.y, bufferDimension * numberOfProbes.z, 16);
         renderTexture.enableRandomWrite = true;
         renderTexture.Create();
     }
 
-    private void OnDrawGizmosSelected()
+    private void OnDrawGizmos()
     {
         if (debugShowProbes)
         {

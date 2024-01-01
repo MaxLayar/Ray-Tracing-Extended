@@ -1148,16 +1148,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ddgiComputeShader: {fileID: 7200000, guid: df36bed0e169e4dc3bf0828a7f7d3b57, type: 3}
-  renderTexture: {fileID: 1961182893}
+  renderTexture: {fileID: 1838908179}
   volume:
-    m_Center: {x: -0.8022717, y: 1.5950503, z: 0.62791824}
-    m_Extent: {x: 1.2637342, y: 1.4466028, z: 1.6279182}
-  minProbesSpacing: 1.1
+    m_Center: {x: -0.59597516, y: 1.2920221, z: 1.1970749}
+    m_Extent: {x: 1.4007196, y: 1.3956648, z: 1.4583786}
+  minProbesSpacing: 1.03
   isRealtimeRaytracing: 1
   debugShowProbes: 1
-  bufferDimension: 6
-  numRaysPerPixel: 10
-  maxBounceCount: 2
+  bufferDimension: 16
+  numRaysPerPixel: 4
+  maxBounceCount: 24
 --- !u!1 &415599277
 GameObject:
   m_ObjectHideFlags: 0
@@ -13527,6 +13527,43 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!84 &1838908179
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 144
+  m_Height: 48
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 90
+  m_ColorFormat: 57
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!43 &1867811529
 Mesh:
   m_ObjectHideFlags: 0
@@ -13774,43 +13811,6 @@ Material:
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!84 &1961182893
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 54
-  m_Height: 18
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 90
-  m_ColorFormat: 57
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!21 &2096534802
 Material:
   serializedVersion: 8

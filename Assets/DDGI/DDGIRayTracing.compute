@@ -219,6 +219,7 @@ float3 Trace(Ray ray, inout uint rngState)
         //     break;
         // }
     }
+
     return incomingLight;
 }
 
@@ -242,25 +243,24 @@ int CoordToIndex(float3 coord, float3 size)
     return coord.z * size.x * size.y + coord.y * size.x + coord.x;
 }
 
-float3 IndexToCoord(int index, float3 size)
+int3 IndexToCoord(int index, float3 size)
 {
-    float3 result;
+    int3 result;
     int a = (size.x * size.y);
     result.z = index / a;
     int b = index - a * result.z;
     result.y = b / size.x;
     result.x = b % size.x;
-    return floor(result);
+    return result;
 }
 
 
-[numthreads(8, 8, 1)]
+[numthreads(8, 8, 2)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
     uint pixelIndex = id.y * id.x + id.x;
 	uint rngState = pixelIndex + Frame * 719393;
 
     Ray ray;
-    float3 totalIncomingLight = 0;
 
     float3 randomDir = RandomDirection(rngState);
     float2 planarProj = SphereToOctProjected(randomDir);
@@ -270,6 +270,7 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
 
     for (int probeIndex = 0; probeIndex < allProbes; probeIndex++)
     {
+        float3 totalIncomingLight = 0;
         for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
         {	
             // Calculate ray origin and direction
