@@ -1148,17 +1148,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ddgiComputeShader: {fileID: 7200000, guid: df36bed0e169e4dc3bf0828a7f7d3b57, type: 3}
-  renderTexture: {fileID: 427207066}
+  renderTexture: {fileID: 1961182893}
   volume:
-    m_Center: {x: 0.44869113, y: 1.8086574, z: 2.7282584}
-    m_Extent: {x: 1.4486907, y: 2.8086574, z: 3.7282584}
-  minProbesSpacing: 1
-  isRealtimeRaytracing: 0
-  debugShowProbes: 0
-  debugRayDir: {x: 7.72, y: 1.41, z: 54.4}
-  debugFrame: 18159
-  numRaysPerPixel: 192
-  maxBounceCount: 1
+    m_Center: {x: -0.8022717, y: 1.5950503, z: 0.62791824}
+    m_Extent: {x: 1.2637342, y: 1.4466028, z: 1.6279182}
+  minProbesSpacing: 1.1
+  isRealtimeRaytracing: 1
+  debugShowProbes: 1
+  bufferDimension: 6
+  numRaysPerPixel: 10
+  maxBounceCount: 2
 --- !u!1 &415599277
 GameObject:
   m_ObjectHideFlags: 0
@@ -1370,43 +1369,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 415599277}
   m_Mesh: {fileID: 1104676495}
---- !u!84 &427207066
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 100
-  m_Height: 100
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 94
-  m_ColorFormat: 57
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 0
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &534234158
 GameObject:
   m_ObjectHideFlags: 0
@@ -1432,7 +1394,7 @@ Transform:
   m_GameObject: {fileID: 534234158}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.39, y: 0, z: 0.6}
+  m_LocalPosition: {x: -0.39, y: -0.72, z: 0.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -10236,15 +10198,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c90e7c58149c9a94caa8bc7ae758c7cf, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.9989996
+      value: -1.33
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c90e7c58149c9a94caa8bc7ae758c7cf, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.07499999
+      value: 0.07
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c90e7c58149c9a94caa8bc7ae758c7cf, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -1.0402
+      value: 0.04
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c90e7c58149c9a94caa8bc7ae758c7cf, type: 3}
       propertyPath: m_LocalRotation.w
@@ -13812,6 +13774,43 @@ Material:
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
+--- !u!84 &1961182893
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 54
+  m_Height: 18
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 90
+  m_ColorFormat: 57
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!21 &2096534802
 Material:
   serializedVersion: 8

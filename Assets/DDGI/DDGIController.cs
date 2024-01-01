@@ -1,6 +1,8 @@
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
+using System;
+using System.Linq;
 
 [ExecuteInEditMode]
 public class DDGIController : MonoBehaviour
@@ -14,9 +16,10 @@ public class DDGIController : MonoBehaviour
     public bool isRealtimeRaytracing = false;
 
     public bool debugShowProbes = false;
-    public Vector3 debugRayDir = Vector3.right;
 
-    public int debugFrame = 1;
+    public int bufferDimension = 6;
+
+    int debugFrame = 1;
 
     [Header("Raytracing")]
     [Range(1,256)]
@@ -27,9 +30,12 @@ public class DDGIController : MonoBehaviour
 
     private float realProbesSpacing;
 
-    Vector3[] probePositions;
+    Vector3[] probesPositions;
+
+    Vector3Int numberOfProbes;
 
     // Prepare Scene
+    ComputeBuffer probesPositionsBuffer;
     ComputeBuffer triangleBuffer;
 	ComputeBuffer meshInfoBuffer;
     List<Triangle> allTriangles;
@@ -50,11 +56,7 @@ public class DDGIController : MonoBehaviour
     public void DispatchDDGIRayTracing()
     {
         if (!renderTexture)
-        {
-            renderTexture = new RenderTexture(256, 256, 24);
-            renderTexture.enableRandomWrite = true;
-            renderTexture.Create();
-        }
+            RecomputeBuffers();
 
         int threadGroupsX = renderTexture.width / 8;
         int threadGroupsY = renderTexture.height / 8;
@@ -65,10 +67,13 @@ public class DDGIController : MonoBehaviour
 
     void SetShaderParams()
 	{
-        ddgiComputeShader.SetFloat("BufferDimension", renderTexture.width);
+		CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
+        ddgiComputeShader.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
+
+        ddgiComputeShader.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.y, numberOfProbes.z, 0));
+        ddgiComputeShader.SetInt("BufferDimension", bufferDimension);
         ddgiComputeShader.SetInt("MaxBounceCount", maxBounceCount);
         ddgiComputeShader.SetInt("Frame", debugFrame);
-        ddgiComputeShader.SetVector("DebugRayDir", debugRayDir);
         ddgiComputeShader.SetTexture(0, "Result", renderTexture);
         ddgiComputeShader.SetInt("NumRaysPerPixel", numRaysPerPixel);
 	}
@@ -138,23 +143,37 @@ public class DDGIController : MonoBehaviour
     {
         Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
 
-        int probesInX = Mathf.CeilToInt(volume.size.x / minProbesSpacing);
-        int probesInY = Mathf.CeilToInt(volume.size.y / minProbesSpacing);
-        int probesInZ = Mathf.CeilToInt(volume.size.z / minProbesSpacing);
+        numberOfProbes = new() {
+            x = Mathf.CeilToInt(volume.size.x / minProbesSpacing),
+            y = Mathf.CeilToInt(volume.size.y / minProbesSpacing),
+            z = Mathf.CeilToInt(volume.size.z / minProbesSpacing)
+        };
 
-        float spacingX = volume.size.x / (probesInX-1);
-        float spacingY = volume.size.y / (probesInY-1);
-        float spacingZ = volume.size.z / (probesInZ-1);
+        float spacingX = volume.size.x / (numberOfProbes.x-1);
+        float spacingY = volume.size.y / (numberOfProbes.y-1);
+        float spacingZ = volume.size.z / (numberOfProbes.z-1);
 
-        probePositions = new Vector3[probesInX * probesInY * probesInZ];
+        probesPositions = new Vector3[numberOfProbes.x * numberOfProbes.y * numberOfProbes.z];
 
         int idx = 0;
-        for (int x = 0; x < probesInX; x++)
-            for (int y = 0; y < probesInY; y++)
-                for (int z = 0; z < probesInZ; z++)
-                    probePositions[idx++] = volume.center - volume.extents + new Vector3(x * spacingX, y * spacingY, z * spacingZ);
+        for (int x = 0; x < numberOfProbes.x; x++)
+            for (int y = 0; y < numberOfProbes.y; y++)
+                for (int z = 0; z < numberOfProbes.z; z++)
+                    probesPositions[idx++] = volume.center - volume.extents + new Vector3(x * spacingX, y * spacingY, z * spacingZ);
 
         realProbesSpacing = minProbesSpacing;
+
+        RecomputeBuffers();
+    }
+
+    void RecomputeBuffers()
+    {
+        if (renderTexture)
+            renderTexture.Release();
+
+        renderTexture = new RenderTexture(bufferDimension * numberOfProbes.x * numberOfProbes.z, bufferDimension * numberOfProbes.y, 16);
+        renderTexture.enableRandomWrite = true;
+        renderTexture.Create();
     }
 
     private void OnDrawGizmosSelected()
@@ -162,12 +181,10 @@ public class DDGIController : MonoBehaviour
         if (debugShowProbes)
         {
             Gizmos.color = Color.yellow;
-            foreach (var probe in probePositions)
+            foreach (var probe in probesPositions)
             {
                 Gizmos.DrawSphere(probe, GizmoUtility.iconSize);
             }
         }
-        Gizmos.color = Color.white;
-        Gizmos.DrawRay(Vector3.zero, debugRayDir*10f);
     }
 }

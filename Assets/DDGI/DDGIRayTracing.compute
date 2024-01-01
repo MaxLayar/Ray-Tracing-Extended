@@ -46,8 +46,9 @@ RWTexture2D<float4> Result;
 uint Frame;
 uint NumRaysPerPixel;
 uint MaxBounceCount;
-float3 DebugRayDir;
-float BufferDimension;
+uint BufferDimension;
+StructuredBuffer<float3> ProbesPositions;
+float4 NumProbes;
 
 // Mesh Scene
 StructuredBuffer<Triangle> Triangles;
@@ -235,6 +236,24 @@ float2 SphereToOctProjected(float3 v) {
     return (v.z <= 0.0) ? ((1.0 - abs(p.yx)) * SignNotZero(p)) : p;
 }
 
+
+int CoordToIndex(float3 coord, float3 size)
+{
+    return coord.z * size.x * size.y + coord.y * size.x + coord.x;
+}
+
+float3 IndexToCoord(int index, float3 size)
+{
+    float3 result;
+    int a = (size.x * size.y);
+    result.z = index / a;
+    int b = index - a * result.z;
+    result.y = b / size.x;
+    result.x = b % size.x;
+    return floor(result);
+}
+
+
 [numthreads(8, 8, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
     uint pixelIndex = id.y * id.x + id.x;
@@ -247,15 +266,26 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
     float2 planarProj = SphereToOctProjected(randomDir);
     planarProj = (planarProj + 1)/2 * BufferDimension;
 
-    for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
-    {	
-        // Calculate ray origin and direction
-        ray.origin = float3(0, 0, 0);
-        ray.dir = normalize(randomDir - ray.origin);
-        // Trace
-        totalIncomingLight += Trace(ray, rngState);
-    }
+    int allProbes = NumProbes.x * NumProbes.y * NumProbes.z;
 
-    float3 pixelCol = totalIncomingLight / NumRaysPerPixel;
-    Result[planarProj] = float4(pixelCol, 1);
+    for (int probeIndex = 0; probeIndex < allProbes; probeIndex++)
+    {
+        for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
+        {	
+            // Calculate ray origin and direction
+            ray.origin = ProbesPositions[probeIndex];
+            ray.dir = normalize(randomDir - ray.origin);
+            // Trace
+            totalIncomingLight += Trace(ray, rngState);
+        }
+
+        float3 probeCoord = IndexToCoord(probeIndex, NumProbes);
+        float2 probePlacement = float2(probeCoord.x + (probeCoord.z * NumProbes.x), probeCoord.y);
+        float2 resultUV = float2(planarProj.x + (probePlacement.x * BufferDimension), planarProj.y + (probePlacement.y * BufferDimension));
+
+        float3 pixelCol = totalIncomingLight / NumRaysPerPixel;
+        Result[resultUV] = float4(pixelCol, 1);
+    }
 }
+
+
