@@ -1,5 +1,3 @@
-// DDGIRayTracing.compute
-#pragma kernel CSMain
 struct Ray
 {
     float3 origin;
@@ -41,62 +39,16 @@ struct MeshInfo
     float3 boundsMax;
 };
 
-// Texture to write to (assuming RGB channels for albedo)
-RWTexture2D<float4> Result;
-uint Frame;
+
+//Raytracing settings
 uint NumRaysPerPixel;
 uint MaxBounceCount;
-uint BufferDimension;
-StructuredBuffer<float3> ProbesPositions;
-float4 NumProbes;
 
 // Mesh Scene
 StructuredBuffer<Triangle> Triangles;
 StructuredBuffer<MeshInfo> AllMeshInfo;
 int NumMeshes;
 
-// Special material types
-static const int CheckerPattern = 1;
-static const int InvisibleLightSource = 2;
-
-// PCG (permuted congruential generator). Thanks to:
-// www.pcg-random.org and www.shadertoy.com/view/XlGcRh
-uint NextRandom(inout uint state)
-{
-    state = state * 747796405 + 2891336453;
-    uint result = ((state >> ((state >> 28) + 4)) ^ state) * 277803737;
-    result = (result >> 22) ^ result;
-    return result;
-}
-
-float RandomValue(inout uint state)
-{
-    return NextRandom(state) / 4294967295.0; // 2^32 - 1
-}
-
-// Random value in normal distribution (with mean=0 and sd=1)
-float RandomValueNormalDistribution(inout uint state)
-{
-    // Thanks to https://stackoverflow.com/a/6178290
-    float theta = 2 * 3.1415926 * RandomValue(state);
-    float rho = sqrt(-2 * log(RandomValue(state)));
-    return rho * cos(theta);
-}
-
-// Calculate a random direction
-float3 RandomDirection(inout uint state)
-{
-    // Thanks to https://math.stackexchange.com/a/1585996
-    float x = RandomValueNormalDistribution(state);
-    float y = RandomValueNormalDistribution(state);
-    float z = RandomValueNormalDistribution(state);
-    return normalize(float3(x, y, z));
-}
-
-float2 mod2(float2 x, float2 y)
-{
-    return x - y * floor(x/y);
-}
 
 // Thanks to https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 bool RayBoundingBox(Ray ray, float3 boxMin, float3 boxMax)
@@ -181,17 +133,6 @@ float3 Trace(Ray ray, inout uint rngState)
         if (hitInfo.didHit)
         {
             RayTracingMaterial material = hitInfo.material;
-            // Handle special material types:
-            if (material.flag == CheckerPattern) 
-            {
-                float2 c = mod2(floor(hitInfo.hitPoint.xz), 2.0);
-                material.colour = c.x == c.y ? material.colour : material.emissionColour;
-            }
-            else if (material.flag == InvisibleLightSource && bounceIndex == 0)
-            {
-                ray.origin = hitInfo.hitPoint + ray.dir * 0.001;
-                continue;
-            }
 
             // Figure out new ray position and direction
             bool isSpecularBounce = material.specularProbability >= RandomValue(rngState);
@@ -219,74 +160,6 @@ float3 Trace(Ray ray, inout uint rngState)
         //     break;
         // }
     }
-
     return incomingLight;
 }
-
-// Returns ±1
-float2 SignNotZero(float2 v) {
-    return float2((v.x >= 0.0) ? +1.0 : -1.0, (v.y >= 0.0) ? +1.0 : -1.0);
-}
-
-// Assume normalized input. Output is on [-1, 1] for each component.
-float2 SphereToOctProjected(float3 v) {
-    // Project the sphere onto the octahedron, and then onto the xy plane
-    float2 p = v.xy * (1.0 / (abs(v.x) + abs(v.y) + abs(v.z)));
-
-    // Reflect the folds of the lower hemisphere over the diagonals
-    return (v.z <= 0.0) ? ((1.0 - abs(p.yx)) * SignNotZero(p)) : p;
-}
-
-
-int CoordToIndex(float3 coord, float3 size)
-{
-    return coord.z * size.x * size.y + coord.y * size.x + coord.x;
-}
-
-int3 IndexToCoord(int index, float3 size)
-{
-    int3 result;
-    int a = (size.x * size.y);
-    result.z = index / a;
-    int b = index - a * result.z;
-    result.y = b / size.x;
-    result.x = b % size.x;
-    return result;
-}
-
-
-[numthreads(8, 8, 2)]
-void CSMain(uint3 id : SV_DispatchThreadID) {
-    uint pixelIndex = id.y * id.x + id.x;
-	uint rngState = pixelIndex + Frame * 719393;
-
-    Ray ray;
-
-    float3 randomDir = RandomDirection(rngState);
-    float2 planarProj = SphereToOctProjected(randomDir);
-    planarProj = (planarProj + 1)/2 * BufferDimension;
-
-    int allProbes = NumProbes.x * NumProbes.y * NumProbes.z;
-
-    for (int probeIndex = 0; probeIndex < allProbes; probeIndex++)
-    {
-        float3 totalIncomingLight = 0;
-        for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
-        {	
-            // Calculate ray origin and direction
-            ray.origin = ProbesPositions[probeIndex];
-            ray.dir = normalize(randomDir - ray.origin);
-            // Trace
-            totalIncomingLight += Trace(ray, rngState);
-        }
-
-        float3 probeCoord = IndexToCoord(probeIndex, NumProbes);
-        float2 probePlacement = float2(probeCoord.x + (probeCoord.z * NumProbes.x), probeCoord.y);
-        float2 resultUV = float2(planarProj.x + (probePlacement.x * BufferDimension), planarProj.y + (probePlacement.y * BufferDimension));
-
-        float3 pixelCol = totalIncomingLight / NumRaysPerPixel;
-        Result[resultUV] = float4(pixelCol, 1);
-    }
-}
-
 

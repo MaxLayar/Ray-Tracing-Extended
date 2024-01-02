@@ -1,0 +1,54 @@
+// DDGIRayTracing.compute
+#include "UnityCG.cginc"
+#include "RandomUtilities.cginc"
+#include "RayTraceUtilities.cginc"
+#include "ShaderUtilities.cginc"
+
+#pragma kernel CSMain
+
+// Texture to write to (assuming RGB channels for albedo)
+RWTexture2D<float4> Result;
+
+uint Frame;
+uint BufferDimension;
+
+//Probes
+StructuredBuffer<float3> ProbesPositions;
+float4 NumProbes;
+
+
+[numthreads(8, 8, 2)]
+void CSMain(uint3 id : SV_DispatchThreadID) {
+    uint pixelIndex = id.y * id.x + id.x;
+	uint rngState = pixelIndex + Frame * 719393;
+
+    Ray ray;
+
+    float3 randomDir = RandomDirection(rngState);
+    float2 planarProj = SphereToOctProjected(randomDir);
+    planarProj = (planarProj + 1)/2 * BufferDimension;
+
+    int allProbes = NumProbes.x * NumProbes.y * NumProbes.z;
+
+    for (int probeIndex = 0; probeIndex < allProbes; probeIndex++)
+    {
+        float3 totalIncomingLight = 0;
+        for (uint rayIndex = 0; rayIndex < NumRaysPerPixel; rayIndex ++)
+        {	
+            // Calculate ray origin and direction
+            ray.origin = ProbesPositions[probeIndex];
+            ray.dir = normalize(randomDir - ray.origin);
+            // Trace
+            totalIncomingLight += Trace(ray, rngState);
+        }
+
+        float3 probeCoord = IndexToCoord(probeIndex, NumProbes);
+        float2 probePlacement = float2(probeCoord.x + (probeCoord.z * NumProbes.x), probeCoord.y);
+        float2 resultUV = float2(planarProj.x + (probePlacement.x * BufferDimension), planarProj.y + (probePlacement.y * BufferDimension));
+
+        float3 pixelCol = totalIncomingLight / NumRaysPerPixel;
+        Result[resultUV] = float4(pixelCol, 1);
+    }
+}
+
+
