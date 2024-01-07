@@ -54,7 +54,7 @@ public class DDGIControllerEditor : Editor
 
             if (GUILayout.Button("Trace Rays"))
             {
-                ddgiController.DispatchDDGIRayTracing();
+                ddgiController.FirstPass();
             }
         }
     }

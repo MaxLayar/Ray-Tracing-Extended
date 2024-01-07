@@ -1,7 +1,9 @@
 struct Ray
 {
     float3 origin;
-    float3 dir;
+    float3 direction;
+    float tMin;
+    float tMax;
 };
 
 struct RayTracingMaterial
@@ -39,10 +41,17 @@ struct MeshInfo
     float3 boundsMax;
 };
 
+struct Sun
+{
+    float3 direction;
+    float padding;
+    float3 color;
+    float padding2;
+};
+
 
 //Raytracing settings
-uint NumRaysPerPixel;
-uint MaxBounceCount;
+uint NumRaysPerProbe;
 
 // Mesh Scene
 StructuredBuffer<Triangle> Triangles;
@@ -53,7 +62,7 @@ int NumMeshes;
 // Thanks to https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 bool RayBoundingBox(Ray ray, float3 boxMin, float3 boxMax)
 {
-    float3 invDir = 1 / ray.dir;
+    float3 invDir = 1 / ray.direction;
     float3 tMin = (boxMin - ray.origin) * invDir;
     float3 tMax = (boxMax - ray.origin) * invDir;
     float3 t1 = min(tMin, tMax);
@@ -71,9 +80,9 @@ HitInfo RayTriangle(Ray ray, Triangle tri)
     float3 edgeAC = tri.posC - tri.posA;
     float3 normalVector = cross(edgeAB, edgeAC);
     float3 ao = ray.origin - tri.posA;
-    float3 dao = cross(ao, ray.dir);
+    float3 dao = cross(ao, ray.direction);
 
-    float determinant = -dot(ray.dir, normalVector);
+    float determinant = -dot(ray.direction, normalVector);
     float invDet = 1 / determinant;
     
     // Calculate dst to triangle & barycentric coordinates of intersection point
@@ -85,14 +94,14 @@ HitInfo RayTriangle(Ray ray, Triangle tri)
     // Initialize hit info
     HitInfo hitInfo;
     hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
-    hitInfo.hitPoint = ray.origin + ray.dir * dst;
+    hitInfo.hitPoint = ray.origin + ray.direction * dst;
     hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
     hitInfo.dst = dst;
     return hitInfo;
 }
 
 // Find the first point that the given ray collides with, and return hit info
-HitInfo CalculateRayCollision(Ray ray)
+bool CalculateRayCollision(in Ray ray, out HitInfo info)
 {
     HitInfo closestHit = (HitInfo)0;
     // We haven't hit anything yet, so 'closest' hit is infinitely far away
@@ -109,57 +118,36 @@ HitInfo CalculateRayCollision(Ray ray)
         for (uint i = 0; i < meshInfo.numTriangles; i ++) {
             int triIndex = meshInfo.firstTriangleIndex + i;
             Triangle tri = Triangles[triIndex];
-            HitInfo hitInfo = RayTriangle(ray, tri);
+            info = RayTriangle(ray, tri);
 
-            if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+            if (info.didHit && info.dst < closestHit.dst)
             {
-                closestHit = hitInfo;
+                closestHit = info;
                 closestHit.material = meshInfo.material;
             }
         }
     }
+    info = closestHit;
 
-    return closestHit;
+    return info.dst < ray.tMax;
 }
 
-float3 Trace(Ray ray, inout uint rngState)
+bool TraceRay(in Ray ray, out HitInfo info)
 {
-    float3 incomingLight = 0;
-    float3 rayColour = 1;
+    bool hit = CalculateRayCollision(ray, info);
 
-    for (uint bounceIndex = 0; bounceIndex <= MaxBounceCount; bounceIndex ++)
+    if (hit)
     {
-        HitInfo hitInfo = CalculateRayCollision(ray);
-        if (hitInfo.didHit)
-        {
-            RayTracingMaterial material = hitInfo.material;
-
-            // Figure out new ray position and direction
-            bool isSpecularBounce = material.specularProbability >= RandomValue(rngState);
-        
-            ray.origin = hitInfo.hitPoint;
-            float3 diffuseDir = normalize(hitInfo.normal + RandomDirection(rngState));
-            float3 specularDir = reflect(ray.dir, hitInfo.normal);
-            ray.dir = normalize(lerp(diffuseDir, specularDir, material.smoothness * isSpecularBounce));
-
-            // Update light calculations
-            float3 emittedLight = (material.emissionColour * material.emissionStrength).rgb;
-            incomingLight += emittedLight * rayColour;
-            rayColour *= lerp(material.colour, material.specularColour, isSpecularBounce).rgb;
-            
-            // Random early exit if ray colour is nearly 0 (can't contribute much to final result)
-            float p = max(rayColour.r, max(rayColour.g, rayColour.b));
-            if (RandomValue(rngState) >= p) {
-                break;
-            }
-            rayColour *= 1.0f / p; 
-        }
-        // else
-        // {
-        //     incomingLight += GetEnvironmentLight(ray) * rayColour;
-        //     break;
-        // }
+        // Update light calculations
+        float4 emittedLight = (info.material.emissionColour * info.material.emissionStrength);
+        info.material.colour *= emittedLight;
     }
-    return incomingLight;
+
+    return hit;
 }
 
+bool TraceRaySimple(in Ray ray)
+{
+    HitInfo info;
+    return CalculateRayCollision(ray, info);
+}

@@ -1,14 +1,15 @@
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
-using System;
 using System.Linq;
+using UnityEngine.Rendering;
 
 [ExecuteInEditMode]
 public class DDGIController : MonoBehaviour
 {
-    public ComputeShader ddgiComputeShader;
-    public RenderTexture renderTexture;
+    public ComputeShader computeRays;
+    public RenderTexture firstPass;
+    public Texture2D debugTexture;
 
     public Bounds volume;
     public float minProbesSpacing = 1f;
@@ -23,7 +24,7 @@ public class DDGIController : MonoBehaviour
 
     [Header("Raytracing")]
     [Range(1,256)]
-    public int numRaysPerPixel = 10;
+    public int numRaysPerProbe = 10;
 
     [Range(0,24)]
     public int maxBounceCount = 1;
@@ -33,6 +34,18 @@ public class DDGIController : MonoBehaviour
     Vector3[] probesPositions;
 
     Vector3Int numberOfProbes;
+
+    public Light sun;
+
+
+    //Buffers
+    RenderTexture rayHitLocationsBuffer;
+    RenderTexture rayHitRadianceBuffer;
+    RenderTexture rayHitNormalsBuffer;
+    RenderTexture rayDirectionsBuffer;
+    RenderTexture rayOriginsBuffer;
+
+
 
     // Prepare Scene
     ComputeBuffer probesPositionsBuffer;
@@ -44,43 +57,103 @@ public class DDGIController : MonoBehaviour
 
     void Update()
     {
-        
         if (isRealtimeRaytracing)
         {
             PrepareScene();
-            DispatchDDGIRayTracing();
+            FirstPass();
+            //DispatchDDGIRayTracing();
             debugFrame++;
         }
     }
 
-    public void DispatchDDGIRayTracing()
+    public void FirstPass()
     {
-        if (!renderTexture)
-            RecomputeBuffers();
+	    int surfelWidth = numRaysPerProbe;
+	    int surfelHeight = numberOfProbes.x * numberOfProbes.y * numberOfProbes.z;
 
-        int threadGroupsX = renderTexture.width / 8;
-        int threadGroupsY = renderTexture.height / 8;
+        //firstPass?.Release();
+        if(!firstPass){
+            firstPass = new RenderTexture(surfelWidth, surfelHeight, 16)
+            {
+                enableRandomWrite = true,
+                name = "First Pass"
+            };
+            firstPass.Create();
+        }
 
-        SetShaderParams();
-        ddgiComputeShader.Dispatch(0, threadGroupsX, threadGroupsY, 2);
+        if(!debugTexture)
+        {
+            debugTexture = new Texture2D(surfelWidth, surfelHeight);
+        }
+
+        // Initialize the ComputeBuffers with the appropriate sizes
+        rayHitLocationsBuffer = new RenderTexture(surfelWidth, surfelHeight, 16); //new ComputeBuffer(surfelWidth * surfelHeight, GetStride<Vector4>(), ComputeBufferType.Default);
+        rayHitRadianceBuffer = new RenderTexture(surfelWidth, surfelHeight, 16); //new ComputeBuffer(surfelWidth * surfelHeight, GetStride<Vector4>(), ComputeBufferType.Default);
+        rayHitNormalsBuffer = new RenderTexture(surfelWidth, surfelHeight, 16); //new ComputeBuffer(surfelWidth * surfelHeight, GetStride<Vector4>(), ComputeBufferType.Default);
+        rayDirectionsBuffer = new RenderTexture(surfelWidth, surfelHeight, 16); //new ComputeBuffer(surfelWidth * surfelHeight, GetStride<Vector4>(), ComputeBufferType.Default);
+        rayOriginsBuffer = new RenderTexture(surfelWidth, surfelHeight, 16); //new ComputeBuffer(surfelWidth * surfelHeight, GetStride<Vector4>(), ComputeBufferType.Default);
+
+        rayHitLocationsBuffer.enableRandomWrite = true;
+        rayHitRadianceBuffer.enableRandomWrite = true;
+        rayHitNormalsBuffer.enableRandomWrite = true;
+        rayDirectionsBuffer.enableRandomWrite = true;
+        rayOriginsBuffer.enableRandomWrite = true;
+
+
+        // Set the buffers to your compute shader material
+        computeRays.SetTexture(0, "rayHitLocations", rayHitLocationsBuffer);
+        computeRays.SetTexture(0, "rayHitRadiance", rayHitRadianceBuffer);
+        computeRays.SetTexture(0, "rayHitNormals", rayHitNormalsBuffer);
+        computeRays.SetTexture(0, "rayDirections", rayDirectionsBuffer);
+        computeRays.SetTexture(0, "rayOrigins", rayOriginsBuffer);
+
+        CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
+        computeRays.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
+
+        computeRays.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
+        computeRays.SetInt("BufferDimension", bufferDimension);
+        computeRays.SetInt("MaxBounceCount", maxBounceCount);
+        computeRays.SetInt("Frame", debugFrame);
+        computeRays.SetInt("NumRaysPerProbe", numRaysPerProbe);
+
+        // Get a random direction in spherical coordinates
+        float theta = Mathf.Acos(2f * Random.value - 1f);
+        float phi = 2f * Mathf.PI * Random.value;
+
+        Vector3 axis = new Vector3(Mathf.Sin(theta) * Mathf.Cos(phi), Mathf.Sin(theta) * Mathf.Sin(phi), Mathf.Cos(theta));
+
+        Matrix4x4 randomOrientationMatrix = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(Random.value * 360f, axis), Vector3.one);
+
+        computeRays.SetMatrix("randomOrientation", randomOrientationMatrix);
+
+        computeRays.SetTexture(0, "Result", firstPass);
+
+        // Dispatch your compute shader
+        int threadGroupsX = Mathf.CeilToInt(surfelWidth / 8.0f);
+        int threadGroupsY = Mathf.CeilToInt(surfelHeight / 8.0f);
+        computeRays.Dispatch(0, threadGroupsX, threadGroupsY, 1);
+
+        // AsyncGPUReadback.Request(rayDirectionsBuffer, callbackMethod);
+
+        // void callbackMethod(AsyncGPUReadbackRequest request)
+        // {
+        //     // Process the data on the CPU
+        //     var result = request.GetData<Vector4>();
+        //     debugTexture.SetPixels(result.Select(v => new Color(v.x, v.y, v.z, v.w)).ToArray());
+        //     debugTexture.Apply();
+        // }
+        
+        // rayHitLocationsBuffer.Dispose();
+        // rayHitRadianceBuffer.Dispose();
+        // rayHitNormalsBuffer.Dispose();
+        // rayDirectionsBuffer.Dispose();
+        // rayOriginsBuffer.Dispose();
     }
-
-    void SetShaderParams()
-	{
-		CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
-        ddgiComputeShader.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
-
-        ddgiComputeShader.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
-        ddgiComputeShader.SetInt("BufferDimension", bufferDimension);
-        ddgiComputeShader.SetInt("MaxBounceCount", maxBounceCount);
-        ddgiComputeShader.SetInt("Frame", debugFrame);
-        ddgiComputeShader.SetTexture(0, "Result", renderTexture);
-        ddgiComputeShader.SetInt("NumRaysPerPixel", numRaysPerPixel);
-	}
 
     public void PrepareScene()
     {
         CreateMeshes();
+        CreateLights();
     }
 
 	void CreateMeshes()
@@ -105,10 +178,16 @@ public class DDGIController : MonoBehaviour
 
 		CreateStructuredBuffer(ref triangleBuffer, allTriangles);
 		CreateStructuredBuffer(ref meshInfoBuffer, allMeshInfo);
-		ddgiComputeShader.SetBuffer(0, "Triangles", triangleBuffer);
-		ddgiComputeShader.SetBuffer(0, "AllMeshInfo", meshInfoBuffer);
-		ddgiComputeShader.SetInt("NumMeshes", allMeshInfo.Count);
+		computeRays.SetBuffer(0, "Triangles", triangleBuffer);
+		computeRays.SetBuffer(0, "AllMeshInfo", meshInfoBuffer);
+		computeRays.SetInt("NumMeshes", allMeshInfo.Count);
 	}
+
+    void CreateLights()
+    {
+        computeRays.SetVector("sunColor", sun.color);
+        computeRays.SetVector("sunDirection", sun.transform.forward);
+    }
 
 	// Create a compute buffer containing the given data (Note: data must be blittable)
 	public static void CreateStructuredBuffer<T>(ref ComputeBuffer buffer, List<T> data) where T : struct
@@ -168,18 +247,6 @@ public class DDGIController : MonoBehaviour
                     probesPositions[idx++] = volume.center - volume.extents + new Vector3(x * spacing.x, y * spacing.y, z * spacing.z);
 
         realProbesSpacing = minProbesSpacing;
-
-        RecomputeBuffers();
-    }
-
-    void RecomputeBuffers()
-    {
-        if (renderTexture)
-            renderTexture.Release();
-
-        renderTexture = new RenderTexture(bufferDimension * numberOfProbes.x * numberOfProbes.y, bufferDimension * numberOfProbes.z, 16);
-        renderTexture.enableRandomWrite = true;
-        renderTexture.Create();
     }
 
     private void OnDrawGizmos()
