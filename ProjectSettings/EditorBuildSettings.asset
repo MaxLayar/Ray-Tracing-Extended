@@ -8,7 +8,8 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/Raytracing.unity
     guid: bb1ae8763b3a1fb4ca081bcbae2a973d
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Vid/Vis/GPU stall recreation.unity
     guid: c8727b5531017e743bb94fb638b86689
   m_configObjects: {}
+  m_UseUCBPForAssetBundles: 0

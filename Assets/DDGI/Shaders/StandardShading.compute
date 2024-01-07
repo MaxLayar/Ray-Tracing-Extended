@@ -1,0 +1,71 @@
+#include "UnityCG.cginc"
+#include "UnityDeferredLibrary.cginc"
+#include "UnityPBSLighting.cginc"
+//#include "UnityGBuffer.cginc"
+//#include "UnityStandardBRDF.cginc"
+
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+unity_v2f_deferred i;
+
+sampler2D _CameraGBufferTexture0;
+sampler2D _CameraGBufferTexture1;
+sampler2D _CameraGBufferTexture2;
+
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    
+    // half4 CalculateLight (unity_v2f_deferred i)
+    // {
+        float3 wpos;
+        float2 uv;
+        float atten, fadeDist;
+        UnityLight light;
+        UNITY_INITIALIZE_OUTPUT(UnityLight, light);
+        UnityDeferredCalculateLightParams (i, wpos, uv, light.dir, atten, fadeDist);
+
+        light.color = _LightColor.rgb * atten;
+
+        // unpack Gbuffer
+        half4 gbuffer0 = tex2D (_CameraGBufferTexture0, uv);
+        half4 gbuffer1 = tex2D (_CameraGBufferTexture1, uv);
+        half4 gbuffer2 = tex2D (_CameraGBufferTexture2, uv);
+        UnityStandardData data = UnityStandardDataFromGbuffer(gbuffer0, gbuffer1, gbuffer2);
+
+        float3 eyeVec = normalize(wpos-_WorldSpaceCameraPos);
+        half oneMinusReflectivity = 1 - SpecularStrength(data.specularColor.rgb);
+
+        UnityIndirect ind;
+        UNITY_INITIALIZE_OUTPUT(UnityIndirect, ind);
+        ind.diffuse = 0;
+        ind.specular = 0;
+
+        half4 res = UNITY_BRDF_PBS (data.diffuseColor, data.specularColor, oneMinusReflectivity, data.smoothness, data.normalWorld, -eyeVec, light, ind);
+
+        Result[id.xy] = res;
+    //}
+
+    //Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+}
+
+//UnityStandardDataFromGbuffer 
+/*
+    UnityStandardData data;
+
+    data.diffuseColor   = inGBuffer0.rgb;
+    data.occlusion      = inGBuffer0.a;
+
+    data.specularColor  = inGBuffer1.rgb;
+    data.smoothness     = inGBuffer1.a;
+
+    data.normalWorld    = normalize((float3)inGBuffer2.rgb * 2 - 1);
+
+    return data;
+*/
