@@ -1,30 +1,33 @@
-using UnityEditor;
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+
+using UnityEditor;
+using UnityEngine;
 
 [ExecuteInEditMode]
 public class DDGIController : MonoBehaviour
 {
     public ComputeShader computeRays;
+	public ComputeShader computeIrradiance;
 
-    public Bounds volume;
+	public Bounds volume;
     public float minProbesSpacing = 1f;
 
     public bool isRealtimeRaytracing = false;
 
     public bool debugShowProbes = false;
 
-    public int bufferDimension = 6;
+    int bufferDimension = 6;
 
-    int debugFrame = 1;
+	public float depthSharpness = 50.0f;
+	public float hysteresis = 0.965f;
+	public bool isOutputIrradiance = false;
+
+	int debugFrame = 1;
 
     [Header("Raytracing")]
     [Range(1,256)]
     public int numRaysPerProbe = 10;
-
-    [Range(0,24)]
-    public int maxBounceCount = 1;
 
     private float realProbesSpacing;
 
@@ -42,30 +45,78 @@ public class DDGIController : MonoBehaviour
     RenderTexture rayDirectionsBuffer;
     RenderTexture rayOriginsBuffer;
 
+	RenderTexture irradianceTex;
+	RenderTexture weightTex;
 
-
-    // Prepare Scene
-    ComputeBuffer probesPositionsBuffer;
+	// Prepare Scene
+	ComputeBuffer lightFieldBuffer;
+	ComputeBuffer probesPositionsBuffer;
     ComputeBuffer triangleBuffer;
 	ComputeBuffer meshInfoBuffer;
     List<Triangle> allTriangles;
     List<MeshInfo> allMeshInfo;
-    int NumMeshes;
 
-    void Update()
+	//
+	ComputeBuffer uniformsBuffer;
+
+	LightField L;
+	struct LightField
+	{
+		public Vector3Int probeCounts;
+		public int raysPerProbe;
+		public Vector3 probeStartPosition;
+		public float normalBias;
+		public Vector3 probeStep;
+		public int irradianceTextureWidth;
+		public int irradianceTextureHeight;
+		public int irradianceProbeSideLength;
+		public int depthTextureWidth;
+		public int depthTextureHeight;
+		public int depthProbeSideLength;
+		public float chebBias, minRayDst, energyConservation;
+	};
+
+	Values V;
+	struct Values
+	{
+		public float depthSharpness;
+		public float hysteresis;
+		public float maxDistance;
+	}
+
+	void Update()
     {
         if (isRealtimeRaytracing)
         {
             PrepareScene();
-            FirstPass();
-            //DispatchDDGIRayTracing();
+            ComputeProbesRays();
+			UpdateProbes();
             debugFrame++;
         }
     }
 
-    public void FirstPass()
-    {
-	    int surfelWidth = numRaysPerProbe;
+	public void ComputeProbesRays()
+	{
+		(Vector3 minScene, Vector3 maxScene) = CalculateSceneBounds();
+		L = new();
+		L.probeCounts = numberOfProbes;
+		L.depthProbeSideLength = 16;
+		L.irradianceProbeSideLength = 16;
+		L.normalBias = 0.25f;
+		L.minRayDst = 0.08f;
+		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
+		L.irradianceTextureHeight = (L.irradianceProbeSideLength + 2) * L.probeCounts.z + 2;
+		L.depthTextureWidth = (L.depthProbeSideLength + 2) * L.probeCounts.x * L.probeCounts.y + 2;
+		L.depthTextureHeight = (L.depthProbeSideLength + 2) * L.probeCounts.z + 2;
+		L.probeStartPosition = minScene - Vector3.one;
+		L.probeStep = DivideVectors((maxScene - minScene + (Vector3.one * 1.3f)),(L.probeCounts - Vector3.one));
+		L.raysPerProbe = numRaysPerProbe;
+		L.energyConservation = 0.85f;
+
+		CreateStructuredBuffer(ref lightFieldBuffer, new List<LightField>() { L });
+		computeRays.SetBuffer(0, "LBuffer", lightFieldBuffer);
+
+		int surfelWidth = numRaysPerProbe;
 	    int surfelHeight = numberOfProbes.x * numberOfProbes.y * numberOfProbes.z;
 
 		RefreshBufferIfNeeded(ref rayHitLocationsBuffer, "rayHitLocations", surfelWidth, surfelHeight);
@@ -74,6 +125,9 @@ public class DDGIController : MonoBehaviour
 		RefreshBufferIfNeeded(ref rayDirectionsBuffer, "rayDirections", surfelWidth, surfelHeight);
 		RefreshBufferIfNeeded(ref rayOriginsBuffer, "rayOrigins", surfelWidth, surfelHeight);
 
+		RefreshBufferIfNeeded(ref irradianceTex, "irradianceTex", L.irradianceTextureWidth, L.irradianceTextureHeight);
+		RefreshBufferIfNeeded(ref weightTex, "weightTex", L.depthTextureWidth, L.depthTextureHeight);
+
 		// Set the buffers to your compute shader material
 		computeRays.SetTexture(0, "rayHitLocations", rayHitLocationsBuffer);
         computeRays.SetTexture(0, "rayHitRadiance", rayHitRadianceBuffer);
@@ -81,12 +135,14 @@ public class DDGIController : MonoBehaviour
         computeRays.SetTexture(0, "rayDirections", rayDirectionsBuffer);
         computeRays.SetTexture(0, "rayOrigins", rayOriginsBuffer);
 
-        CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
+		computeRays.SetTexture(0, "irradianceTex", irradianceTex);
+		computeRays.SetTexture(0, "weightTex", weightTex);
+
+		CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
         computeRays.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
 
         computeRays.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
         computeRays.SetInt("BufferDimension", bufferDimension);
-        computeRays.SetInt("MaxBounceCount", maxBounceCount);
         computeRays.SetInt("Frame", debugFrame);
         computeRays.SetInt("NumRaysPerProbe", numRaysPerProbe);
 
@@ -104,7 +160,44 @@ public class DDGIController : MonoBehaviour
         int threadGroupsX = Mathf.CeilToInt(surfelWidth / 8.0f);
         int threadGroupsY = Mathf.CeilToInt(surfelHeight / 8.0f);
         computeRays.Dispatch(0, threadGroupsX, threadGroupsY, 1);
-    }
+	}
+
+
+	public void UpdateProbes()
+	{
+		computeIrradiance.SetFloat("PROBE_SIDE_LENGTH", L.irradianceProbeSideLength);
+		computeIrradiance.SetInt("RAYS_PER_PROBE", numRaysPerProbe);
+
+		if (isOutputIrradiance)
+		{
+			computeIrradiance.SetInt("OUTPUT_IRRADIANCE", 1);
+			computeIrradiance.SetTexture(0, "rayHitRadiance", rayHitRadianceBuffer);
+		}
+		else
+		{
+			computeIrradiance.SetTexture(0, "rayHitLocations", rayHitLocationsBuffer);
+			computeIrradiance.SetTexture(0, "rayOrigins", rayOriginsBuffer);
+			computeIrradiance.SetTexture(0, "rayHitNormals", rayHitNormalsBuffer);
+		}
+
+		computeIrradiance.SetTexture(0, "rayDirections", rayDirectionsBuffer);
+
+		V = new();
+		V.depthSharpness = depthSharpness;
+		V.hysteresis = hysteresis;
+		Vector3 probeEnd = L.probeStartPosition + MultiplyVectors(new Vector3(L.probeCounts.x - 1, L.probeCounts.y - 1, L.probeCounts.z -1), L.probeStep);
+		Vector3 probeSpan = probeEnd - L.probeStartPosition;
+		V.maxDistance = Vector3.Magnitude(DivideVectors(probeSpan, L.probeCounts)) * 1.5f;
+
+		CreateStructuredBuffer(ref uniformsBuffer, new List<Values>() { V });
+		computeIrradiance.SetBuffer(0, "uniforms", uniformsBuffer);
+		computeIrradiance.SetTexture(0, "tex", isOutputIrradiance ? irradianceTex : weightTex);
+
+		// Dispatch your compute shader
+		int threadGroupsX = Mathf.CeilToInt((isOutputIrradiance ? L.irradianceTextureWidth : L.depthTextureWidth) / 8f);
+		int threadGroupsY = Mathf.CeilToInt((isOutputIrradiance ? L.irradianceTextureHeight : L.depthTextureHeight) / 8f);
+		computeIrradiance.Dispatch(0, threadGroupsX, threadGroupsY, 1);
+	}
 
 	private void RefreshBufferIfNeeded(ref RenderTexture buffer, string bufferName, int width, int heigh)
 	{
@@ -187,7 +280,7 @@ public class DDGIController : MonoBehaviour
 
     public void RefreshProbesPlacement()
     {
-        Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
+        UnityEngine.Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
 
         numberOfProbes = new(
             Mathf.CeilToInt(volume.size.x / minProbesSpacing),
@@ -233,4 +326,61 @@ public class DDGIController : MonoBehaviour
             }
         }
     }
+
+
+	public static (Vector3 min, Vector3 max) CalculateSceneBounds()
+	{
+		Vector3 min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+		Vector3 max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+
+		foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+		{
+			CalculateGameObjectBounds(go, ref min, ref max);
+		}
+
+		return (min, max);
+	}
+
+	private static void CalculateGameObjectBounds(GameObject go, ref Vector3 min, ref Vector3 max)
+	{
+		Renderer renderer = go.GetComponent<Renderer>();
+
+		if (renderer != null)
+		{
+			Bounds bounds = renderer.bounds;
+			min = Vector3.Min(min, bounds.min);
+			max = Vector3.Max(max, bounds.max);
+		}
+
+		for (int i = 0; i < go.transform.childCount; i++)
+		{
+			CalculateGameObjectBounds(go.transform.GetChild(i).gameObject, ref min, ref max);
+		}
+	}
+
+	private static Vector3 MultiplyVectors(Vector3 a, Vector3 b)
+	{
+		return new Vector3(a.x * b.x, a.y * b.y, a.z * b.z);
+	}
+
+	private static Vector3 DivideVectors(Vector3 a, Vector3 b)
+	{
+		return new Vector3(a.x / b.x, a.y / b.y, a.z / b.z);
+	}
 }
+
+
+
+/* EXECUTION ORDER : 
+ * 
+ * 
+ * 1 Write borders with 1s (in irr & weight buffers)
+ * 2 Ray pass (STEP 1 from Morgan's explaination)
+ * 3 Update weight probe pass (STEP 2)
+ * 3.5 copy border weight pass
+ * 4 Update irradiance probe pass
+ * 4.5 copy border irr pass
+ * 5 samples the probes per pixel, per frame (pixel shader?) (STEP 3)
+ * 
+ * 
+ */
