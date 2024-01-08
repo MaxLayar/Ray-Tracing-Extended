@@ -136,12 +136,12 @@ bool TraceRay(in Ray ray, out HitInfo info)
 {
     bool hit = CalculateRayCollision(ray, info);
 
-    if (hit)
-    {
-        // Update light calculations
-        float4 emittedLight = (info.material.emissionColour * info.material.emissionStrength);
-        info.material.colour *= emittedLight;
-    }
+    //if (hit)
+    //{
+    //    // Update light calculations
+    //    float4 emittedLight = (info.material.emissionColour * info.material.emissionStrength);
+    //    info.material.colour *= emittedLight > 0. ? emittedLight : 1.;
+    //}
 
     return hit;
 }
