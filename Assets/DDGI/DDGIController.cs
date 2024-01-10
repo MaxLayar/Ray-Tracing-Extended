@@ -7,57 +7,19 @@ using UnityEngine;
 [ExecuteInEditMode]
 public class DDGIController : MonoBehaviour
 {
-    public ComputeShader computeRays;
-	public ComputeShader computeIrradiance;
-
+	[Header("     Probes"), Space(5)]
 	public Bounds volume;
     public float minProbesSpacing = 1f;
 
-    public bool isRealtimeRaytracing = false;
+	//Debug
+	public bool debugShowProbes = false;
 
-    public bool debugShowProbes = false;
-
-    int bufferDimension = 6;
-
-	public float depthSharpness = 50.0f;
-	public float hysteresis = 0.965f;
-	public bool isOutputIrradiance = false;
-
-	int debugFrame = 1;
-
-    [Header("Raytracing")]
-    [Range(1,256)]
-    public int numRaysPerProbe = 10;
-
-    private float realProbesSpacing;
-
+	Vector3Int numberOfProbes;
     Vector3[] probesPositions;
+    float realProbesSpacing;
+	int bufferDimension = 6;
 
-    Vector3Int numberOfProbes;
-
-    public Light sun;
-
-
-    //Buffers
-    RenderTexture rayHitLocationsBuffer;
-    RenderTexture rayHitRadianceBuffer;
-    RenderTexture rayHitNormalsBuffer;
-    RenderTexture rayDirectionsBuffer;
-    RenderTexture rayOriginsBuffer;
-
-	RenderTexture irradianceTex;
-	RenderTexture weightTex;
-
-	// Prepare Scene
-	ComputeBuffer lightFieldBuffer;
 	ComputeBuffer probesPositionsBuffer;
-    ComputeBuffer triangleBuffer;
-	ComputeBuffer meshInfoBuffer;
-    List<Triangle> allTriangles;
-    List<MeshInfo> allMeshInfo;
-
-	//
-	ComputeBuffer uniformsBuffer;
 
 	LightField L;
 	struct LightField
@@ -76,6 +38,36 @@ public class DDGIController : MonoBehaviour
 		public float chebBias, minRayDst, energyConservation;
 	};
 
+	[Space(20), Header("     RayTracing"), Space(5)]
+	public bool isRealtimeRaytracing = false;
+	public ComputeShader computeRays;
+    [Range(1,300)]
+    public int numRaysPerProbe = 10;
+
+	//Buffers
+	ComputeBuffer lightFieldBuffer;
+	RenderTexture rayHitLocationsBuffer;
+    RenderTexture rayHitRadianceBuffer;
+    RenderTexture rayHitNormalsBuffer;
+    RenderTexture rayDirectionsBuffer;
+    RenderTexture rayOriginsBuffer;
+
+	int randomSeed = 1;
+
+
+	[Space(20), Header("     Irradiance Settings"), Space(5)]
+	public ComputeShader computeIrradiance;
+	[Range(0f, 1f)]
+	public float energyConservation = 0.85f;
+	[Range(0f, 1f)]
+	public float hysteresis = 0.965f;
+
+	public float depthSharpness = 50.0f;
+
+	[SerializeField] RenderTexture irradianceTex;
+	[SerializeField] RenderTexture weightTex;
+
+	ComputeBuffer uniformsBuffer;
 	Values V;
 	struct Values
 	{
@@ -84,26 +76,36 @@ public class DDGIController : MonoBehaviour
 		public float maxDistance;
 	}
 
+
+	[Space(20), Header("     Scene Objects"), Space(5)]
+	ComputeBuffer triangleBuffer;
+	ComputeBuffer meshInfoBuffer;
+    List<Triangle> allTriangles;
+    List<MeshInfo> allMeshInfo;
+	public Light sun;
+
+
 	void Update()
     {
         if (isRealtimeRaytracing)
         {
             PrepareScene();
             ComputeProbesRays();
-			UpdateProbes();
-            debugFrame++;
+			UpdateProbes(true);
+			UpdateProbes(false);
+            randomSeed++;
         }
     }
 
 	public void ComputeProbesRays()
 	{
-		(Vector3 minScene, Vector3 maxScene) = CalculateSceneBounds();
+		(Vector3 minScene, Vector3 maxScene) = (volume.min, volume.max);
 		L = new();
 		L.probeCounts = numberOfProbes;
-		L.depthProbeSideLength = 16;
-		L.irradianceProbeSideLength = 16;
-		L.normalBias = 0.25f;
-		L.minRayDst = 0.08f;
+		L.depthProbeSideLength = 14;
+		L.irradianceProbeSideLength = 4;
+		L.normalBias = 0.10f;
+		L.minRayDst = 0.00f;
 		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
 		L.irradianceTextureHeight = (L.irradianceProbeSideLength + 2) * L.probeCounts.z + 2;
 		L.depthTextureWidth = (L.depthProbeSideLength + 2) * L.probeCounts.x * L.probeCounts.y + 2;
@@ -111,7 +113,7 @@ public class DDGIController : MonoBehaviour
 		L.probeStartPosition = minScene - Vector3.one;
 		L.probeStep = DivideVectors((maxScene - minScene + (Vector3.one * 1.3f)),(L.probeCounts - Vector3.one));
 		L.raysPerProbe = numRaysPerProbe;
-		L.energyConservation = 0.85f;
+		L.energyConservation = energyConservation;
 
 		CreateStructuredBuffer(ref lightFieldBuffer, new List<LightField>() { L });
 		computeRays.SetBuffer(0, "LBuffer", lightFieldBuffer);
@@ -143,7 +145,7 @@ public class DDGIController : MonoBehaviour
 
         computeRays.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
         computeRays.SetInt("BufferDimension", bufferDimension);
-        computeRays.SetInt("Frame", debugFrame);
+        computeRays.SetInt("Frame", randomSeed);
         computeRays.SetInt("NumRaysPerProbe", numRaysPerProbe);
 
         // Get a random direction in spherical coordinates
@@ -163,9 +165,9 @@ public class DDGIController : MonoBehaviour
 	}
 
 
-	public void UpdateProbes()
+	public void UpdateProbes(bool isOutputIrradiance)
 	{
-		computeIrradiance.SetFloat("PROBE_SIDE_LENGTH", L.irradianceProbeSideLength);
+		computeIrradiance.SetFloat("PROBE_SIDE_LENGTH", isOutputIrradiance ? L.irradianceProbeSideLength : L.depthProbeSideLength);
 		computeIrradiance.SetInt("RAYS_PER_PROBE", numRaysPerProbe);
 
 		if (isOutputIrradiance)
@@ -201,13 +203,18 @@ public class DDGIController : MonoBehaviour
 
 	private void RefreshBufferIfNeeded(ref RenderTexture buffer, string bufferName, int width, int heigh)
 	{
-		if (!buffer || buffer.width != width || buffer.height != heigh)
+		if (!buffer)
 		{
-			buffer?.Release();
-
 			buffer = new RenderTexture(width, heigh, 16);
 			buffer.enableRandomWrite = true;
 			buffer.name = bufferName;
+		}
+
+		if (buffer.width != width || buffer.height != heigh)
+		{
+			buffer.Release();
+			buffer.width = width;
+			buffer.height = heigh;
 		}
 	}
 

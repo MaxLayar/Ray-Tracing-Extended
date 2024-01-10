@@ -16,7 +16,6 @@ RWTexture2D<float4> rayOrigins;
 float4x4 randomOrientation;
 float4 sunColor;
 float3 sunDirection;
-float energyConservation = 0.95;
 
 //DEBUG
 int Frame;
@@ -43,7 +42,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(ray.origin.xyz-info.hitPoint);
-        float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, energyConservation, viewVec), 0);
+        float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, L.energyConservation, viewVec), 0);
         Ray shadowRay;
         shadowRay.direction = -sunDirection;
         shadowRay.origin = info.hitPoint;

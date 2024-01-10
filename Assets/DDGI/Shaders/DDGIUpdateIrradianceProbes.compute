@@ -24,8 +24,6 @@ struct Values
 StructuredBuffer<Values> uniforms;
 
 
-
-
 int probeID(float2 texelXY, uint width) {
     int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
     int probesPerSide = (width - 2) / probeWithBorderSide;
@@ -68,14 +66,13 @@ void main(uint3 id : SV_DispatchThreadID)
     }
 
     float3 texelDirection = octDecode(normalizedOctCoord(texelPos));
-    const float energyConservation = 0.95;
 
     // For each ray
 	for (int r = 0; r < RAYS_PER_PROBE; ++r) {
 		int3 C = int3(r, relativeProbeID,0);
 		float3 rayDirection    = rayDirections.Load(C).xyz;
 #if OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * energyConservation; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * L.energyConservation; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = rayHitLocations.Load(C).xyz;
 
