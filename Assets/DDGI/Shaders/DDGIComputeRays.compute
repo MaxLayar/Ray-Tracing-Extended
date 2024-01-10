@@ -27,9 +27,9 @@ void main(uint3 id : SV_DispatchThreadID)
     
     uint2 texelPos = uint2(id.x, id.y);
 
-    // uint2 dim;
-    // rayDirections.GetDimensions(dim.x, dim.y);
-    // if(texelPos.x >= dim.x || texelPos.y >= dim.y) return;
+    uint2 dim;
+    rayDirections.GetDimensions(dim.x, dim.y);    
+    if(texelPos.x >= dim.x || texelPos.y >= dim.y) return;
 
     Ray ray;
     ray.direction = normalize(float3(mul(sphericalFibonacci((float) texelPos.x, (float) NumRaysPerProbe), (float3x3) randomOrientation))); //rayId = texelPos.x

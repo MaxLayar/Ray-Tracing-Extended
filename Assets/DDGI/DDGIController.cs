@@ -253,8 +253,11 @@ public class DDGIController : MonoBehaviour
 
     void CreateLights()
     {
-        computeRays.SetVector("sunColor", sun.isActiveAndEnabled ? sun.color : Color.black);
-        computeRays.SetVector("sunDirection", sun.transform.forward);
+		if (sun && sun.isActiveAndEnabled)
+		{
+			computeRays.SetVector("sunColor", sun.color);
+			computeRays.SetVector("sunDirection", sun.transform.forward);
+		}
     }
 
 	// Create a compute buffer containing the given data (Note: data must be blittable)
@@ -333,37 +336,6 @@ public class DDGIController : MonoBehaviour
             }
         }
     }
-
-
-	public static (Vector3 min, Vector3 max) CalculateSceneBounds()
-	{
-		Vector3 min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
-		Vector3 max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
-
-		foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
-		{
-			CalculateGameObjectBounds(go, ref min, ref max);
-		}
-
-		return (min, max);
-	}
-
-	private static void CalculateGameObjectBounds(GameObject go, ref Vector3 min, ref Vector3 max)
-	{
-		Renderer renderer = go.GetComponent<Renderer>();
-
-		if (renderer != null)
-		{
-			Bounds bounds = renderer.bounds;
-			min = Vector3.Min(min, bounds.min);
-			max = Vector3.Max(max, bounds.max);
-		}
-
-		for (int i = 0; i < go.transform.childCount; i++)
-		{
-			CalculateGameObjectBounds(go.transform.GetChild(i).gameObject, ref min, ref max);
-		}
-	}
 
 	private static Vector3 MultiplyVectors(Vector3 a, Vector3 b)
 	{
