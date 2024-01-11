@@ -53,10 +53,9 @@ void main(uint3 id : SV_DispatchThreadID)
         allLight = (directL + indirectL) * info.material.colour;
     }
 
-    float d = max(dot(-sunDirection,info.normal),0);
     rayDirections[texelPos] = float4(ray.direction,0);
-    rayHitLocations[texelPos] = info.didHit ? float4(info.hitPoint,0) : float4(0,0,0,0);
+    rayHitLocations[texelPos] = float4(info.hitPoint, info.dst) * info.didHit;
     rayHitRadiance[texelPos] = allLight;
-    rayHitNormals[texelPos] = info.didHit ? float4(info.normal,0) : float4(0,0,0,0);
+    rayHitNormals[texelPos] = float4(info.normal,0) * info.didHit;
     rayOrigins[texelPos] = float4(ray.origin, info.dst);
 }
