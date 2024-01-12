@@ -5,6 +5,9 @@
 #include "RandomUtilities.cginc"
 #include "SampleIrradianceField.cginc"
 
+#include <UnityPBSLighting.cginc>
+#include <UnityStandardBRDF.cginc>
+
 StructuredBuffer<float3> ProbesPositions;
 
 RWTexture2D<float4> rayDirections;
@@ -19,6 +22,53 @@ float3 sunDirection;
 
 //DEBUG
 int Frame;
+
+
+float3 Shade(SurfaceOutputStandard s, float3 viewVec)
+{    
+    float4 albedo = float4(s.Albedo, s.Alpha);
+
+    float metallic = s.Metallic;
+    float smoothness = s.Smoothness;
+    float occlusion = s.Occlusion;
+    float3 emission = s.Emission;
+
+    // Fetch Normal Map from texture
+    float3 normalMap = s.Normal;// * 2.0f - 1.0f;
+
+    // Calculate world normal from the normal map (Assuming the normal map is in tangent space)
+    float3 worldNormal = normalize(normalMap);
+
+    // View direction (camera to the current pixel)
+    float3 viewDir = normalize(viewVec);
+
+    // Light direction (assuming a directional light, adjust for your light source)
+    float3 lightDir = normalize(sunDirection);
+
+    // Half vector (used in specular reflection calculation)
+    float3 halfVec = normalize(viewDir + lightDir);
+
+    // Lambertian reflection (Diffuse reflection)
+    float3 diffuseReflection = albedo.rgb / M_PI;
+
+    // Cook-Torrance BRDF with GGX microfacet model (Specular reflection)
+    float NdotL = saturate(dot(worldNormal, lightDir));
+    float NdotV = saturate(dot(worldNormal, viewDir));
+    float NdotH = saturate(dot(worldNormal, halfVec));
+    float VdotH = saturate(dot(viewDir, halfVec));
+
+    float alpha = smoothness * smoothness;
+    float alpha2 = alpha * alpha;
+
+    float D = alpha2 / (M_PI * pow(NdotH * NdotH * (alpha2 - 1) + 1, 2));
+    float G = min(1, min(2 * NdotH * min(NdotV, NdotL) / VdotH, 2 * NdotH * min(NdotV, NdotL) / NdotH));
+    float F = 0.04 + (1 - 0.04) * pow(1 - VdotH, 5);
+
+    float3 specularReflection = (D * G * F) / (4 * NdotL * NdotV);
+
+    // Final color (Combining diffuse and specular reflections with occlusion)
+    return lerp(diffuseReflection, specularReflection, metallic) * (1 - occlusion) + emission.rgb;
+}
 
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID) 
@@ -38,10 +88,11 @@ void main(uint3 id : SV_DispatchThreadID)
     ray.tMax = 20.0;
 
     HitInfo info;
-    float4 allLight = float4(0,0,0,0);
+    float4 allLight = float4(0, 0, 0, 0);
+    half4 outGBuffer0, outGBuffer1, outGBuffer2;
     if (TraceRay(ray, info))
     {
-        float3 viewVec = normalize(ray.origin.xyz-info.hitPoint);
+        float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
         float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, L.energyConservation, viewVec), 0);
         Ray shadowRay;
         shadowRay.direction = -sunDirection;
@@ -49,8 +100,23 @@ void main(uint3 id : SV_DispatchThreadID)
         shadowRay.tMin = 0.01;
         shadowRay.tMax = 20.0;
         int lit = !TraceRaySimple(shadowRay); //sHit ? 0 : 1;
-        float4 directL = max(dot(-sunDirection, info.normal),0.0) * sunColor * lit;
-        allLight = (directL + indirectL) * info.material.colour;
+        float4 directL = max(dot(info.normal, -sunDirection), 0.0) * sunColor * lit;
+        //allLight = (directL + indirectL) * info.material.colour;
+        
+        SurfaceOutputStandard s;
+        
+        s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
+        s.Normal = info.normal; // tangent space normal, if written
+        s.Emission = info.material.emissionColour;
+        s.Metallic = info.material.specularProbability; // 0=non-metal, 1=metal
+            // Smoothness is the user facing name, it should be perceptual smoothness but user should not have to deal with it.
+            // Everywhere in the code you meet smoothness it is perceptual smoothness
+        s.Smoothness = info.material.smoothness; // 0=rough, 1=smooth
+        s.Occlusion = 0; // occlusion (default 1)
+        s.Alpha = info.material.colour.w; // alpha for transparencies
+
+        
+        allLight = (directL + indirectL) * float4(Shade(s, viewVec), 0);
     }
 
     rayDirections[texelPos] = float4(ray.direction,0);
