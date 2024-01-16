@@ -46,6 +46,11 @@ public class DDGIControllerEditor : Editor
     {
         base.OnInspectorGUI();
 
+        if (GUILayout.Button("Reset Buffers"))
+        {
+            ddgiController.ResetBuffers();
+        }
+
         if (!ddgiController.isRealtimeRaytracing){
             if (GUILayout.Button("Prepare Scene"))
             {

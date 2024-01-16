@@ -364,8 +364,8 @@ public class DDGIController : MonoBehaviour
 			{
 				for (int x = 0; x < rayHitLocationsBuffer.width; x++)
 				{
-					Gizmos.color = GetProbeColor(y);
-					//Gizmos.color = hitRadianceDebugTexture.GetPixel(x, y);
+					//Gizmos.color = GetProbeColor(y);
+					Gizmos.color = hitRadianceDebugTexture.GetPixel(x, y);
 
 					Color positionColor = hitPointsDebugTexture.GetPixel(x, y);
 					Vector3 position = new Vector3(positionColor.r, positionColor.g, positionColor.b);
@@ -425,6 +425,27 @@ public class DDGIController : MonoBehaviour
 	{
 		return new Vector3(a.x / b.x, a.y / b.y, a.z / b.z);
 	}
+
+	public void ResetBuffers()
+	{
+		ClearOutRenderTexture(weightTex);
+		ClearOutRenderTexture(irradianceTex);
+
+		ClearOutRenderTexture(rayHitLocationsBuffer);
+		ClearOutRenderTexture(rayHitRadianceBuffer);
+		ClearOutRenderTexture(rayHitNormalsBuffer);
+		ClearOutRenderTexture(rayDirectionsBuffer);
+		ClearOutRenderTexture(rayOriginsBuffer);
+	}
+
+	public void ClearOutRenderTexture(RenderTexture renderTexture)
+	{
+		RenderTexture rt = RenderTexture.active;
+		RenderTexture.active = renderTexture;
+		GL.Clear(true, true, Color.clear);
+		RenderTexture.active = rt;
+	}
+
 }
 
 
