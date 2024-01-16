@@ -111,8 +111,8 @@ void main(uint3 id : SV_DispatchThreadID)
 
         allLight = float4(Shade(s, viewVec), s.Alpha); 
     }
-
-    rayDirections[texelPos] = float4(ray.direction,0);
+    
+    rayDirections[texelPos] = float4(ray.direction, info.dst);
     rayHitLocations[texelPos] = float4(info.hitPoint, info.dst) * info.didHit;
     rayHitRadiance[texelPos] = allLight;
     rayHitNormals[texelPos] = float4(info.normal,0) * info.didHit;

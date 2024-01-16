@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 [ExecuteInEditMode]
@@ -87,19 +89,24 @@ public class DDGIController : MonoBehaviour
 	public bool debugShowProbes = false;
 	public bool isRealtimeRaytracing = false;
 	public bool isRandomDirection = true;
+	[Header("DANGEROUS")]
+	public bool showHitPoints = false;
+	Texture2D hitPointsDebugTexture;
+	Texture2D hitNormalsDebugTexture;
+	Texture2D hitRadianceDebugTexture;
 
 
 	void Update()
-    {
-        if (isRealtimeRaytracing)
-        {
-            PrepareScene();
-            ComputeProbesRays();
+	{
+		if (isRealtimeRaytracing)
+		{
+			PrepareScene();
+			ComputeProbesRays();
 			UpdateProbes(true);
 			UpdateProbes(false);
-            randomSeed++;
-        }
-    }
+			randomSeed++;
+		}
+	}
 
 	public void ComputeProbesRays()
 	{
@@ -336,16 +343,78 @@ public class DDGIController : MonoBehaviour
     {
         if (debugShowProbes)
         {
+			int probeID = 0;
             foreach (var probe in probesPositions)
-            {
-            	Gizmos.color = Color.yellow;
-                Gizmos.DrawSphere(probe, GizmoUtility.iconSize);
+			{
+				Gizmos.color = GetProbeColor(probeID++);
+				Gizmos.DrawSphere(probe, GizmoUtility.iconSize);
 
 				Gizmos.color = Color.red;
 				Gizmos.DrawRay(probe, randomOrientationMatrix.GetColumn(2));
             }
         }
-    }
+
+		if (showHitPoints)
+		{
+			hitPointsDebugTexture = GetRTPixels(rayHitLocationsBuffer);
+			hitNormalsDebugTexture = GetRTPixels(rayHitNormalsBuffer);
+			hitRadianceDebugTexture = GetRTPixels(rayHitRadianceBuffer);
+
+			for (int y = 0; y < rayHitLocationsBuffer.height; y++)
+			{
+				for (int x = 0; x < rayHitLocationsBuffer.width; x++)
+				{
+					Gizmos.color = GetProbeColor(y);
+					//Gizmos.color = hitRadianceDebugTexture.GetPixel(x, y);
+
+					Color positionColor = hitPointsDebugTexture.GetPixel(x, y);
+					Vector3 position = new Vector3(positionColor.r, positionColor.g, positionColor.b);
+					Gizmos.DrawSphere(position, GizmoUtility.iconSize / 4);
+
+					Color normalColor = hitNormalsDebugTexture.GetPixel(x, y);
+					Vector3 normal = new Vector3(normalColor.r, normalColor.g, normalColor.b);
+					Gizmos.DrawRay(position, DivideVectors(normal, new Vector3(10,10,10)));
+
+					Gizmos.color *= new Color(1,1,1,.1f);
+					Gizmos.DrawLine(position, probesPositions[y]);
+				}
+			}
+		}
+	}
+
+	static public Texture2D GetRTPixels(RenderTexture rt)
+	{
+		// Remember currently active render texture
+		RenderTexture currentActiveRT = RenderTexture.active;
+
+		// Set the supplied RenderTexture as the active one
+		RenderTexture.active = rt;
+
+		// Create a new Texture2D and read the RenderTexture image into it
+		Texture2D tex = new Texture2D(rt.width, rt.height, UnityEngine.Experimental.Rendering.DefaultFormat.HDR, UnityEngine.Experimental.Rendering.TextureCreationFlags.DontInitializePixels);
+		tex.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
+		tex.Apply();
+
+		// Restorie previously active render texture
+		RenderTexture.active = currentActiveRT;
+		return tex;
+	}
+
+	private Color GetProbeColor(int probeID)
+	{
+		Random.State state = Random.state;
+
+		Random.InitState(probeID);
+		float r = Random.value;
+		Random.InitState(probeID + 1);
+		float g = Random.value;
+		Random.InitState(probeID + 2);
+		float b = Random.value;
+
+		Random.state = state;
+
+		return new Color(r, g, b);
+	}
 
 	private static Vector3 MultiplyVectors(Vector3 a, Vector3 b)
 	{
