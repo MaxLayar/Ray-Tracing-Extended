@@ -136,9 +136,3 @@ bool TraceRay(in Ray ray, out HitInfo info)
 {
     return CalculateRayCollision(ray, info);
 }
-
-bool TraceRaySimple(in Ray ray)
-{
-    HitInfo info;
-    return CalculateRayCollision(ray, info);
-}

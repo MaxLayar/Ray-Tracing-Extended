@@ -81,7 +81,7 @@ void main(uint3 id : SV_DispatchThreadID)
     ray.direction = normalize(float3(mul(sphericalFibonacci((float) texelPos.x, (float) NumRaysPerProbe), (float3x3) randomOrientation))); //rayId = texelPos.x
     ray.origin = ProbesPositions[texelPos.y]; //probeId = texelPos.y
     ray.tMin = 0.01;
-    ray.tMax = 2000.0;
+    ray.tMax = 1000.0;
 
     HitInfo info;
     float4 allLight = float4(0,0,0,0);
@@ -89,13 +89,16 @@ void main(uint3 id : SV_DispatchThreadID)
     {
         float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
         float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, L.energyConservation, viewVec), 0);
+        
+        HitInfo shadowHit;
         Ray shadowRay;
         shadowRay.direction = -sunDirection;
-        shadowRay.origin = info.hitPoint;
+        shadowRay.origin = info.hitPoint + (info.normal * L.normalBias);
         shadowRay.tMin = 0.01;
-        shadowRay.tMax = 2000.0;
-        int lit = !TraceRaySimple(shadowRay); //sHit ? 0 : 1;
-        float4 directL = max(dot(info.normal, -sunDirection), 0.0) * sunColor * lit;
+        shadowRay.tMax = 1000.0;
+        int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
+
+        float4 directL = max(dot(info.normal, -sunDirection), 0.01) * sunColor * lit;
         allLight = directL + indirectL;
 
         SurfaceOutputStandard s;
@@ -109,7 +112,7 @@ void main(uint3 id : SV_DispatchThreadID)
         s.Occlusion = 0; // occlusion (default 1)
         s.Alpha = info.material.colour.w; // alpha for transparencies
 
-        allLight = float4(Shade(s, viewVec), s.Alpha); 
+        allLight *= float4(Shade(s, viewVec), s.Alpha); 
     }
     
     rayDirections[texelPos] = float4(ray.direction, info.dst);
