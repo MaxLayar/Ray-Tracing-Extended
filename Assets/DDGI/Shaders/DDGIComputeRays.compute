@@ -24,51 +24,47 @@ float3 sunDirection;
 int Frame;
 
 
-float3 Shade(SurfaceOutputStandard s, float3 viewVec)
-{    
-    float4 albedo = float4(s.Albedo, s.Alpha);
-
-    float metallic = s.Metallic;
-    float smoothness = s.Smoothness;
-    float occlusion = s.Occlusion;
-    float3 emission = s.Emission;
-
+float3 Shade(SurfaceOutputStandard s, float3 viewVec) {
     // Fetch Normal Map from texture
-    float3 normalMap = s.Normal;// * 2.0f - 1.0f;
-
-    // Calculate world normal from the normal map (Assuming the normal map is in tangent space)
-    float3 worldNormal = normalize(normalMap);
-
+    float3 normalMap = s.Normal;
+  
+    // World normal (assuming normals are already in worldspace)
+    float3 worldNormal = normalMap;
+  
     // View direction (camera to the current pixel)
     float3 viewDir = normalize(viewVec);
-
+  
     // Light direction (assuming a directional light, adjust for your light source)
     float3 lightDir = normalize(sunDirection);
-
+  
     // Half vector (used in specular reflection calculation)
     float3 halfVec = normalize(viewDir + lightDir);
-
+  
     // Lambertian reflection (Diffuse reflection)
-    float3 diffuseReflection = albedo.rgb / M_PI;
-
+    float3 diffuseReflection = s.Albedo.rgb / M_PI;
+  
     // Cook-Torrance BRDF with GGX microfacet model (Specular reflection)
+    float roughness = s.Smoothness * s.Smoothness;
+    float roughness2 = roughness * roughness;
+  
     float NdotL = saturate(dot(worldNormal, lightDir));
     float NdotV = saturate(dot(worldNormal, viewDir));
     float NdotH = saturate(dot(worldNormal, halfVec));
     float VdotH = saturate(dot(viewDir, halfVec));
-
-    float alpha = smoothness * smoothness;
-    float alpha2 = alpha * alpha;
-
-    float D = alpha2 / (M_PI * pow(NdotH * NdotH * (alpha2 - 1) + 1, 2));
+  
+    float D = roughness2 / (M_PI * pow(NdotH * NdotH * (roughness2 - 1) + 1, 2));
     float G = min(1, min(2 * NdotH * min(NdotV, NdotL) / VdotH, 2 * NdotH * min(NdotV, NdotL) / NdotH));
     float F = 0.04 + (1 - 0.04) * pow(1 - VdotH, 5);
-
+  
     float3 specularReflection = (D * G * F) / (4 * NdotL * NdotV);
-
+  
+    // Occlusion factor (reducing specular reflections in occluded areas)
+    float occlusion = s.Occlusion;
+    float3 specularReflectionOcclud = specularReflection * occlusion;
+  
     // Final color (Combining diffuse and specular reflections with occlusion)
-    return lerp(diffuseReflection, specularReflection, metallic) * (1 - occlusion) + emission.rgb;
-}
+    return lerp(diffuseReflection, specularReflectionOcclud, s.Metallic) * (1 - occlusion) + s.Emission.rgb;
+}  
 
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID) 
@@ -85,11 +81,10 @@ void main(uint3 id : SV_DispatchThreadID)
     ray.direction = normalize(float3(mul(sphericalFibonacci((float) texelPos.x, (float) NumRaysPerProbe), (float3x3) randomOrientation))); //rayId = texelPos.x
     ray.origin = ProbesPositions[texelPos.y]; //probeId = texelPos.y
     ray.tMin = 0.01;
-    ray.tMax = 20.0;
+    ray.tMax = 2000.0;
 
     HitInfo info;
-    float4 allLight = float4(0, 0, 0, 0);
-    half4 outGBuffer0, outGBuffer1, outGBuffer2;
+    float4 allLight = float4(0,0,0,0);
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
@@ -98,13 +93,12 @@ void main(uint3 id : SV_DispatchThreadID)
         shadowRay.direction = -sunDirection;
         shadowRay.origin = info.hitPoint;
         shadowRay.tMin = 0.01;
-        shadowRay.tMax = 20.0;
+        shadowRay.tMax = 2000.0;
         int lit = !TraceRaySimple(shadowRay); //sHit ? 0 : 1;
         float4 directL = max(dot(info.normal, -sunDirection), 0.0) * sunColor * lit;
-        //allLight = (directL + indirectL) * info.material.colour;
-        
+        allLight = directL + indirectL;
+
         SurfaceOutputStandard s;
-        
         s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
         s.Normal = info.normal; // tangent space normal, if written
         s.Emission = info.material.emissionColour;
@@ -115,8 +109,7 @@ void main(uint3 id : SV_DispatchThreadID)
         s.Occlusion = 0; // occlusion (default 1)
         s.Alpha = info.material.colour.w; // alpha for transparencies
 
-        
-        allLight = (directL + indirectL) * float4(Shade(s, viewVec), 0);
+        allLight = float4(Shade(s, viewVec), s.Alpha); 
     }
 
     rayDirections[texelPos] = float4(ray.direction,0);

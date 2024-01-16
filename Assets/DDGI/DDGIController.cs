@@ -11,9 +11,6 @@ public class DDGIController : MonoBehaviour
 	public Bounds volume;
     public float minProbesSpacing = 1f;
 
-	//Debug
-	public bool debugShowProbes = false;
-
 	Vector3Int numberOfProbes;
     Vector3[] probesPositions;
     float realProbesSpacing;
@@ -39,7 +36,6 @@ public class DDGIController : MonoBehaviour
 	};
 
 	[Space(20), Header("     RayTracing"), Space(5)]
-	public bool isRealtimeRaytracing = false;
 	public ComputeShader computeRays;
     [Range(1,300)]
     public int numRaysPerProbe = 10;
@@ -53,6 +49,7 @@ public class DDGIController : MonoBehaviour
     RenderTexture rayOriginsBuffer;
 
 	int randomSeed = 1;
+	Matrix4x4 randomOrientationMatrix;
 
 
 	[Space(20), Header("     Irradiance Settings"), Space(5)]
@@ -85,6 +82,13 @@ public class DDGIController : MonoBehaviour
 	public Light sun;
 
 
+	[Space(20), Header("     DEBUG"), Space(5)]
+
+	public bool debugShowProbes = false;
+	public bool isRealtimeRaytracing = false;
+	public bool isRandomDirection = true;
+
+
 	void Update()
     {
         if (isRealtimeRaytracing)
@@ -102,8 +106,8 @@ public class DDGIController : MonoBehaviour
 		(Vector3 minScene, Vector3 maxScene) = (volume.min, volume.max);
 		L = new();
 		L.probeCounts = numberOfProbes;
-		L.depthProbeSideLength = 14;
-		L.irradianceProbeSideLength = 4;
+		L.depthProbeSideLength = 252;
+		L.irradianceProbeSideLength = 252;
 		L.normalBias = 0.10f;
 		L.minRayDst = 0.00f;
 		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
@@ -148,14 +152,17 @@ public class DDGIController : MonoBehaviour
         computeRays.SetInt("Frame", randomSeed);
         computeRays.SetInt("NumRaysPerProbe", numRaysPerProbe);
 
-        // Get a random direction in spherical coordinates
-        float theta = Mathf.Acos(2f * Random.value - 1f);
-        float phi = 2f * Mathf.PI * Random.value;
+		if (isRandomDirection)
+		{
+			// Get a random direction in spherical coordinates
+			float theta = Mathf.Acos(2f * Random.value - 1f);
+			float phi = 2f * Mathf.PI * Random.value;
 
-        Vector3 axis = new Vector3(Mathf.Sin(theta) * Mathf.Cos(phi), Mathf.Sin(theta) * Mathf.Sin(phi), Mathf.Cos(theta));
+			Vector3 axis = new Vector3(Mathf.Sin(theta) * Mathf.Cos(phi), Mathf.Sin(theta) * Mathf.Sin(phi), Mathf.Cos(theta));
 
-        Matrix4x4 randomOrientationMatrix = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(Random.value * 360f, axis), Vector3.one);
-
+			randomOrientationMatrix = Matrix4x4.TRS(Vector3.zero, Quaternion.AngleAxis(Random.value * 360f, axis), Vector3.one);
+		}
+		
         computeRays.SetMatrix("randomOrientation", randomOrientationMatrix);
 
         // Dispatch your compute shader
@@ -329,10 +336,13 @@ public class DDGIController : MonoBehaviour
     {
         if (debugShowProbes)
         {
-            Gizmos.color = Color.yellow;
             foreach (var probe in probesPositions)
             {
+            	Gizmos.color = Color.yellow;
                 Gizmos.DrawSphere(probe, GizmoUtility.iconSize);
+
+				Gizmos.color = Color.red;
+				Gizmos.DrawRay(probe, randomOrientationMatrix.GetColumn(2));
             }
         }
     }
