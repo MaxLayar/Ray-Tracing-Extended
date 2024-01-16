@@ -1,11 +1,12 @@
 #pragma kernel main
 #include "OctahedralUtilities.cginc"
+#define OUTPUT_IRRADIANCE
 
 float PROBE_SIDE_LENGTH;
 int RAYS_PER_PROBE;
 
 RWTexture2D<float4> tex;
-#if OUTPUT_IRRADIANCE
+#ifdef OUTPUT_IRRADIANCE
 Texture2D rayHitRadiance;
 #else
 Texture2D rayHitLocations;
@@ -61,7 +62,7 @@ void main(uint3 id : SV_DispatchThreadID)
     int relativeProbeID = probeID(texelPos.xy, dim.x);
 
     if (relativeProbeID == -1) {
-        result = float4(0.0f,0.f,0.f,0.f);
+        tex[texelPos] = float4(0.0f,0.f,0.f,0.f);
         return;
     }
 
@@ -71,8 +72,8 @@ void main(uint3 id : SV_DispatchThreadID)
 	for (int r = 0; r < RAYS_PER_PROBE; ++r) {
 		int3 C = int3(r, relativeProbeID, 0);
 		float3 rayDirection    = rayDirections.Load(C).xyz;
-#if OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * L.energyConservation; // Energy is conserved in sampleIrradiance field. Is it needed here?
+#ifdef OUTPUT_IRRADIANCE
+        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz;// * L.energyConservation; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = rayHitLocations.Load(C).xyz;
 
@@ -91,14 +92,14 @@ void main(uint3 id : SV_DispatchThreadID)
 #endif
 
 
-#if OUTPUT_IRRADIANCE
+#ifdef OUTPUT_IRRADIANCE
         float weight = max(0.0, dot(texelDirection, rayDirection));
 #else
         float weight = pow(max(0.0, dot(texelDirection, rayDirection)), uniforms[0].depthSharpness);
 #endif
         if (weight >= epsilon) {
             // Storing the sum of the weights in alpha temporarily
-#if OUTPUT_IRRADIANCE
+#ifdef OUTPUT_IRRADIANCE
             result += float4(rayHitRadiance_ * weight, weight);
 #else
             result += float4(rayProbeDistance * weight,

@@ -88,7 +88,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
-        float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, L.energyConservation, viewVec), 0);
+        float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, L.energyConservation, viewVec), 1);
         
         HitInfo shadowHit;
         Ray shadowRay;
@@ -97,17 +97,14 @@ void main(uint3 id : SV_DispatchThreadID)
         shadowRay.tMin = 0.01;
         shadowRay.tMax = 1000.0;
         int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
-
-        float4 directL = max(dot(info.normal, -sunDirection), 0.01) * sunColor * lit;
+        float4 directL = sunColor * max(dot(info.normal, -sunDirection), 0) * lit;
         allLight = directL + indirectL;
 
         SurfaceOutputStandard s;
         s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
-        s.Normal = info.normal; // tangent space normal, if written
+        s.Normal = info.normal;
         s.Emission = info.material.emissionColour;
         s.Metallic = info.material.specularProbability; // 0=non-metal, 1=metal
-            // Smoothness is the user facing name, it should be perceptual smoothness but user should not have to deal with it.
-            // Everywhere in the code you meet smoothness it is perceptual smoothness
         s.Smoothness = info.material.smoothness; // 0=rough, 1=smooth
         s.Occlusion = 0; // occlusion (default 1)
         s.Alpha = info.material.colour.w; // alpha for transparencies

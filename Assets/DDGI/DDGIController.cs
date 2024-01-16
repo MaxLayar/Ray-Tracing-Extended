@@ -186,7 +186,6 @@ public class DDGIController : MonoBehaviour
 
 		if (isOutputIrradiance)
 		{
-			computeIrradiance.SetInt("OUTPUT_IRRADIANCE", 1);
 			computeIrradiance.SetTexture(0, "rayHitRadiance", rayHitRadianceBuffer);
 		}
 		else
@@ -219,7 +218,7 @@ public class DDGIController : MonoBehaviour
 	{
 		if (!buffer)
 		{
-			buffer = new RenderTexture(width, heigh, 16);
+			buffer = new RenderTexture(width, heigh, 16, UnityEngine.Experimental.Rendering.DefaultFormat.HDR);
 			buffer.enableRandomWrite = true;
 			buffer.name = bufferName;
 		}
