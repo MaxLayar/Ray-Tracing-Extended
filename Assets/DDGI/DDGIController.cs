@@ -1,9 +1,7 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 
 [ExecuteInEditMode]
@@ -113,8 +111,8 @@ public class DDGIController : MonoBehaviour
 		(Vector3 minScene, Vector3 maxScene) = (volume.min, volume.max);
 		L = new();
 		L.probeCounts = numberOfProbes;
-		L.depthProbeSideLength = 252;
-		L.irradianceProbeSideLength = 252;
+		L.depthProbeSideLength = 14;
+		L.irradianceProbeSideLength = 4;
 		L.normalBias = 0.10f;
 		L.minRayDst = 0.00f;
 		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
@@ -186,10 +184,12 @@ public class DDGIController : MonoBehaviour
 
 		if (isOutputIrradiance)
 		{
+			computeIrradiance.EnableKeyword("OUTPUT_IRRADIANCE");
 			computeIrradiance.SetTexture(0, "rayHitRadiance", rayHitRadianceBuffer);
 		}
 		else
 		{
+			computeIrradiance.DisableKeyword("OUTPUT_IRRADIANCE");
 			computeIrradiance.SetTexture(0, "rayHitLocations", rayHitLocationsBuffer);
 			computeIrradiance.SetTexture(0, "rayOrigins", rayOriginsBuffer);
 			computeIrradiance.SetTexture(0, "rayHitNormals", rayHitNormalsBuffer);

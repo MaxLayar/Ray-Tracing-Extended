@@ -1277,22 +1277,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   volume:
-    m_Center: {x: -0.23093629, y: 1.2627537, z: 0.38188708}
-    m_Extent: {x: 0.43329084, y: 0.48639488, z: 0.43330538}
+    m_Center: {x: -0.2693329, y: 1.3718485, z: 1.0691986}
+    m_Extent: {x: 2.9558115, y: 2.4864616, z: 2.9180813}
   minProbesSpacing: 0.85
   computeRays: {fileID: 7200000, guid: 3362504a94ecb4598a2e25e2898ddc1f, type: 3}
-  numRaysPerProbe: 300
+  numRaysPerProbe: 100
   computeIrradiance: {fileID: 7200000, guid: 1f767dd72dccda84c8448cab78102d25, type: 3}
-  energyConservation: 0.85
-  hysteresis: 0.97
+  energyConservation: 0.134
+  hysteresis: 0.809
   depthSharpness: 50
   irradianceTex: {fileID: 1201582348}
   weightTex: {fileID: 361783297}
   sun: {fileID: 1574535520}
-  debugShowProbes: 1
+  debugShowProbes: 0
   isRealtimeRaytracing: 1
-  isRandomDirection: 1
-  showHitPoints: 1
+  isRandomDirection: 0
+  showHitPoints: 0
 --- !u!84 &361783297
 RenderTexture:
   m_ObjectHideFlags: 0
@@ -1305,8 +1305,8 @@ RenderTexture:
     Hash: 00000000000000000000000000000000
   m_IsAlphaChannelOptional: 0
   serializedVersion: 6
-  m_Width: 1018
-  m_Height: 510
+  m_Width: 674
+  m_Height: 114
   m_AntiAliasing: 1
   m_MipCount: -1
   m_DepthStencilFormat: 0
@@ -9603,8 +9603,8 @@ RenderTexture:
     Hash: 00000000000000000000000000000000
   m_IsAlphaChannelOptional: 0
   serializedVersion: 6
-  m_Width: 1018
-  m_Height: 510
+  m_Width: 254
+  m_Height: 44
   m_AntiAliasing: 1
   m_MipCount: -1
   m_DepthStencilFormat: 0

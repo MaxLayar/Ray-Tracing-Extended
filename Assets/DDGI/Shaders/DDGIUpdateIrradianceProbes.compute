@@ -1,6 +1,6 @@
 #pragma kernel main
+#pragma multi_compile_local __ OUTPUT_IRRADIANCE
 #include "OctahedralUtilities.cginc"
-#define OUTPUT_IRRADIANCE
 
 float PROBE_SIDE_LENGTH;
 int RAYS_PER_PROBE;
