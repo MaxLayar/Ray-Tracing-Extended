@@ -120,6 +120,7 @@ float2 textureCoordFromDirection(float3 dir, int probeIndex, int fullTextureWidt
 
 float3 SampleIrradianceField(float3 wsPosition, float3 wsN, float energyPreservation, in float3 viewVec)
 {  
+    L = LBuffer[0];
     // View vector
     float3 w_o = viewVec;
 

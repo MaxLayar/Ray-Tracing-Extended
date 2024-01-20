@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-[ExecuteInEditMode]
+[ExecuteAlways, ImageEffectAllowedInSceneView]
 public class DDGIController : MonoBehaviour
 {
 	[Header("     Probes"), Space(5)]
@@ -299,6 +299,8 @@ public class DDGIController : MonoBehaviour
         {
             RefreshProbesPlacement();
         }
+
+		numRaysPerPixel = Mathf.Max(1, numRaysPerPixel);
     }
 
     public void RefreshProbesPlacement()
@@ -445,6 +447,97 @@ public class DDGIController : MonoBehaviour
 		RenderTexture.active = rt;
 	}
 
+
+
+	   [Header("Ray Tracing Settings")]
+	[SerializeField, Range(0, 64)] int numRaysPerPixel = 2;
+
+
+	[Header("View Settings")]
+	[SerializeField] bool useShaderInSceneView;
+
+	[Header("References")]
+	[SerializeField] Shader rayTracingShader;
+
+	[Header("Info")]
+	[SerializeField] int numRenderedFrames;
+
+
+
+	// Materials and render textures
+	Material rayTracingMaterial;
+	RenderTexture resultTexture;
+
+
+	void Start()
+	{
+		numRenderedFrames = 0;
+	}
+
+    void OnRenderImage(RenderTexture src, RenderTexture target)
+    {
+        bool isSceneCam = Camera.current.name == "SceneCamera";
+
+        if (isSceneCam)
+        {
+            if (useShaderInSceneView)
+            {
+                InitFrame();
+                Graphics.Blit(src, target, rayTracingMaterial);
+            }
+            else
+            {
+                Graphics.Blit(src, target); // Draw the unaltered camera render to the screen
+            }
+        }
+        else
+        {
+            InitFrame();
+
+            // Create copy of prev frame
+            //RenderTexture prevFrameCopy = RenderTexture.GetTemporary(src.width, src.height, 0, ShaderHelper.RGBA_SFloat);
+            //Graphics.Blit(resultTexture, prevFrameCopy);
+
+
+            Graphics.Blit(src, target, rayTracingMaterial);
+
+            // Draw result to screen
+            //Graphics.Blit(resultTexture, target);
+
+            // Release temps
+            //RenderTexture.ReleaseTemporary(prevFrameCopy);
+
+            numRenderedFrames += Application.isPlaying ? 1 : 0;
+        }
+    }
+
+
+	void InitFrame()
+	{
+		// Create materials used in blits
+		ShaderHelper.InitMaterial(rayTracingShader, ref rayTracingMaterial);
+		
+		Camera.current.depthTextureMode = DepthTextureMode.Depth;
+
+		// Run the ray tracing shader and draw the result to a temp texture
+		rayTracingMaterial.SetInt("Frame", numRenderedFrames);
+
+		rayTracingMaterial.SetBuffer("LBuffer", lightFieldBuffer);
+
+		rayTracingMaterial.SetTexture("irradianceTex", irradianceTex);
+		rayTracingMaterial.SetTexture("weightTex", weightTex);
+
+		rayTracingMaterial.SetMatrix("_InverseView", Camera.current.cameraToWorldMatrix);
+
+		// Create result render texture
+		ShaderHelper.CreateRenderTexture(ref resultTexture, Screen.width, Screen.height, FilterMode.Bilinear, ShaderHelper.RGBA_SFloat, "Result");
+	}
+
+
+	void OnDisable()
+	{
+		ShaderHelper.Release(resultTexture);
+	}
 }
 
 
