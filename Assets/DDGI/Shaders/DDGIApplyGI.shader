@@ -97,16 +97,15 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
             half4 Fragment(Varyings input) : SV_Target
             {
                 float3 normal = tex2D(_CameraGBufferTexture2, input.texcoord);
-                //normal = mul(_InverseView, normal);
+                //normal = UnityObjectToWorldNormal(normal);
 
                 float4 vpos = float4(ComputeViewSpacePosition(input), 1);
                 float4 wpos = mul(_InverseView, vpos);
 
-                float3 viewDir = WorldSpaceViewDir(wpos);
+                float3 viewDir = WorldSpaceViewDir(vpos);
                 
                 float3 color = tex2D(_MainTex, input.texcoord);
-
-                return float4(color + SampleIrradianceField(wpos.xyz, normal, 0.85, viewDir),1);
+                return float4(color + SampleIrradianceField(wpos.xyz, normal, .9, viewDir),1);
             }
 
             ENDHLSL

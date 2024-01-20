@@ -120,7 +120,7 @@ public class DDGIController : MonoBehaviour
 		L.depthTextureWidth = (L.depthProbeSideLength + 2) * L.probeCounts.x * L.probeCounts.y + 2;
 		L.depthTextureHeight = (L.depthProbeSideLength + 2) * L.probeCounts.z + 2;
 		L.probeStartPosition = minScene - Vector3.one;
-		L.probeStep = DivideVectors((maxScene - minScene + (Vector3.one * 1.3f)),(L.probeCounts - Vector3.one));
+		L.probeStep = DivideVectors(maxScene - minScene + (Vector3.one * 1.3f),(L.probeCounts - Vector3.one));
 		L.raysPerProbe = numRaysPerProbe;
 		L.energyConservation = energyConservation;
 
@@ -326,11 +326,11 @@ public class DDGIController : MonoBehaviour
         probesPositions = new Vector3[numberOfProbes.x * numberOfProbes.y * numberOfProbes.z];
 
         int idx = 0;
-		for (int x = 0; x < numberOfProbes.x; x++)
+		for (int z = 0; z < numberOfProbes.z; z++)
 		{
 			for (int y = 0; y < numberOfProbes.y; y++)
 			{
-				for (int z = 0; z < numberOfProbes.z; z++)
+				for (int x = 0; x < numberOfProbes.x; x++)
 				{
 					probesPositions[idx++] = volume.center - volume.extents + new Vector3(x * spacing.x, y * spacing.y, z * spacing.z);
 				}
@@ -494,18 +494,7 @@ public class DDGIController : MonoBehaviour
         {
             InitFrame();
 
-            // Create copy of prev frame
-            //RenderTexture prevFrameCopy = RenderTexture.GetTemporary(src.width, src.height, 0, ShaderHelper.RGBA_SFloat);
-            //Graphics.Blit(resultTexture, prevFrameCopy);
-
-
             Graphics.Blit(src, target, rayTracingMaterial);
-
-            // Draw result to screen
-            //Graphics.Blit(resultTexture, target);
-
-            // Release temps
-            //RenderTexture.ReleaseTemporary(prevFrameCopy);
 
             numRenderedFrames += Application.isPlaying ? 1 : 0;
         }
