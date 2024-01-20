@@ -1,0 +1,44 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#include "UnityCG.cginc"
+#include "RayTraceUtilities.cginc"
+#include "SampleIrradianceField.cginc"
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+// Camera parameters
+float4x4 _CameraLocalToWorld;
+float3 ViewParams;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint2 texelPos = uint2(id.x, id.y);
+    uint2 dim;
+    Result.GetDimensions(dim.x, dim.y);
+
+    float2 uv = float2((float) texelPos.x/dim.x, (float) texelPos.y/dim.y);
+    float3 viewPointLocal = float3(uv - 0.5, 1) * ViewParams;
+    float3 viewPoint = mul(_CameraLocalToWorld, float4(viewPointLocal, 1));
+
+    Ray ray;
+    ray.origin = _WorldSpaceCameraPos;
+    ray.direction = normalize(viewPoint - ray.origin);
+    ray.tMin = 0.01;
+    ray.tMax = 1000.0;
+
+    HitInfo info;
+    if (TraceRay(ray, info))
+    {
+        float4 color = info.material.colour;
+        float4 irradiance = float4(SampleIrradianceField(info.hitPoint, info.normal, 0.85, ray.direction), 0);
+        Result[id.xy] = 
+            color +
+            irradiance;
+    }
+    else
+        Result[id.xy] = float4(0,0,1,1);
+}

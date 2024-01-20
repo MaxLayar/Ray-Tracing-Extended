@@ -50,17 +50,5 @@ public class DDGIControllerEditor : Editor
         {
             ddgiController.ResetBuffers();
         }
-
-        if (!ddgiController.isRealtimeRaytracing){
-            if (GUILayout.Button("Prepare Scene"))
-            {
-                ddgiController.PrepareScene();
-            }
-
-            if (GUILayout.Button("Trace Rays"))
-            {
-                ddgiController.ComputeProbesRays();
-            }
-        }
     }
 }

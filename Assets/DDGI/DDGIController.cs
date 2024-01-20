@@ -73,14 +73,12 @@ public class DDGIController : MonoBehaviour
 		public float maxDistance;
 	}
 
-
 	[Space(20), Header("     Scene Objects"), Space(5)]
 	ComputeBuffer triangleBuffer;
 	ComputeBuffer meshInfoBuffer;
     List<Triangle> allTriangles;
     List<MeshInfo> allMeshInfo;
 	public Light sun;
-
 
 	[Space(20), Header("     DEBUG"), Space(5)]
 
@@ -98,7 +96,7 @@ public class DDGIController : MonoBehaviour
 	{
 		if (isRealtimeRaytracing)
 		{
-			PrepareScene();
+			PrepareScene(computeRays);
 			ComputeProbesRays();
 			UpdateProbes(true);
 			UpdateProbes(false);
@@ -231,13 +229,14 @@ public class DDGIController : MonoBehaviour
 		}
 	}
 
-	public void PrepareScene()
+	public void PrepareScene(ComputeShader cs)
     {
-        CreateMeshes();
-        CreateLights();
+		CreateMeshBuffers();
+        SetMeshesBuffer(cs);
+        SetLightsValues(cs);
     }
 
-	void CreateMeshes()
+	void CreateMeshBuffers()
 	{
 		RayTracedMesh[] meshObjects = FindObjectsByType<RayTracedMesh>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
 
@@ -259,17 +258,21 @@ public class DDGIController : MonoBehaviour
 
 		CreateStructuredBuffer(ref triangleBuffer, allTriangles);
 		CreateStructuredBuffer(ref meshInfoBuffer, allMeshInfo);
-		computeRays.SetBuffer(0, "Triangles", triangleBuffer);
-		computeRays.SetBuffer(0, "AllMeshInfo", meshInfoBuffer);
-		computeRays.SetInt("NumMeshes", allMeshInfo.Count);
 	}
 
-    void CreateLights()
+	void SetMeshesBuffer(ComputeShader cs)
+	{
+		cs.SetBuffer(0, "Triangles", triangleBuffer);
+		cs.SetBuffer(0, "AllMeshInfo", meshInfoBuffer);
+		cs.SetInt("NumMeshes", allMeshInfo.Count);
+	}
+
+    void SetLightsValues(ComputeShader cs)
     {
 		if (sun && sun.isActiveAndEnabled)
 		{
-			computeRays.SetVector("sunColor", sun.color);
-			computeRays.SetVector("sunDirection", sun.transform.forward);
+			cs.SetVector("sunColor", sun.color);
+			cs.SetVector("sunDirection", sun.transform.forward);
 		}
     }
 
@@ -305,7 +308,7 @@ public class DDGIController : MonoBehaviour
 
     public void RefreshProbesPlacement()
     {
-        UnityEngine.Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
+        Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
 
         numberOfProbes = new(
             Mathf.CeilToInt(volume.size.x / minProbesSpacing),
@@ -455,19 +458,18 @@ public class DDGIController : MonoBehaviour
 
 	[Header("View Settings")]
 	[SerializeField] bool useShaderInSceneView;
+	[SerializeField] bool isRaytracingRendering;
 
 	[Header("References")]
-	[SerializeField] Shader rayTracingShader;
+	[SerializeField] Shader rasterizedDDGIShader;
+	[SerializeField] ComputeShader raytracedDDGIShader;
 
 	[Header("Info")]
 	[SerializeField] int numRenderedFrames;
 
-
-
 	// Materials and render textures
-	Material rayTracingMaterial;
+	Material blitMaterial;
 	RenderTexture resultTexture;
-
 
 	void Start()
 	{
@@ -481,20 +483,23 @@ public class DDGIController : MonoBehaviour
         if (isSceneCam)
         {
             if (useShaderInSceneView)
-            {
-                InitFrame();
-                Graphics.Blit(src, target, rayTracingMaterial);
-            }
+			{
+				InitFrame();
+				if (isRaytracingRendering)
+					Graphics.Blit(resultTexture, target);
+				else
+                	Graphics.Blit(src, target, blitMaterial);
+			}
             else
-            {
                 Graphics.Blit(src, target); // Draw the unaltered camera render to the screen
-            }
         }
         else
         {
-            InitFrame();
-
-            Graphics.Blit(src, target, rayTracingMaterial);
+			InitFrame();
+			if (isRaytracingRendering)
+				Graphics.Blit(resultTexture, target);
+			else
+				Graphics.Blit(src, target, blitMaterial);
 
             numRenderedFrames += Application.isPlaying ? 1 : 0;
         }
@@ -503,23 +508,45 @@ public class DDGIController : MonoBehaviour
 
 	void InitFrame()
 	{
-		// Create materials used in blits
-		ShaderHelper.InitMaterial(rayTracingShader, ref rayTracingMaterial);
-		
-		Camera.current.depthTextureMode = DepthTextureMode.Depth;
+		if (!isRaytracingRendering)
+		{
+			Camera.current.depthTextureMode = DepthTextureMode.Depth;
 
-		// Run the ray tracing shader and draw the result to a temp texture
-		rayTracingMaterial.SetInt("Frame", numRenderedFrames);
+			// Create materials used in blits
+			ShaderHelper.InitMaterial(rasterizedDDGIShader, ref blitMaterial);
 
-		rayTracingMaterial.SetBuffer("LBuffer", lightFieldBuffer);
+			blitMaterial.SetBuffer("LBuffer", lightFieldBuffer);
 
-		rayTracingMaterial.SetTexture("irradianceTex", irradianceTex);
-		rayTracingMaterial.SetTexture("weightTex", weightTex);
+			blitMaterial.SetTexture("irradianceTex", irradianceTex);
+			blitMaterial.SetTexture("weightTex", weightTex);
 
-		rayTracingMaterial.SetMatrix("_InverseView", Camera.current.cameraToWorldMatrix);
+			blitMaterial.SetMatrix("_InverseView", Camera.current.cameraToWorldMatrix);
+		}
+		else
+		{
+			Camera cam = Camera.current;
+			RefreshBufferIfNeeded(ref resultTexture, "Result", cam.scaledPixelWidth, cam.scaledPixelHeight);
+			raytracedDDGIShader.SetTexture(0, "Result", resultTexture);
 
-		// Create result render texture
-		ShaderHelper.CreateRenderTexture(ref resultTexture, Screen.width, Screen.height, FilterMode.Bilinear, ShaderHelper.RGBA_SFloat, "Result");
+			raytracedDDGIShader.SetBuffer(0, "LBuffer", lightFieldBuffer);
+
+			raytracedDDGIShader.SetTexture(0, "irradianceTex", irradianceTex);
+			raytracedDDGIShader.SetTexture(0, "weightTex", weightTex);
+
+			// Set camera parameters
+			float planeHeight = cam.farClipPlane * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * 2;
+			float planeWidth = planeHeight * cam.aspect;
+			raytracedDDGIShader.SetVector("ViewParams", new Vector3(planeWidth, planeHeight, cam.farClipPlane));
+			raytracedDDGIShader.SetMatrix("_CameraLocalToWorld", cam.transform.localToWorldMatrix);
+
+			SetMeshesBuffer(raytracedDDGIShader);
+			SetLightsValues(raytracedDDGIShader);
+
+			// Dispatch your compute shader
+			int threadGroupsX = Mathf.CeilToInt(cam.scaledPixelWidth/8.0f);
+			int threadGroupsY = Mathf.CeilToInt(cam.scaledPixelHeight/8.0f);
+			raytracedDDGIShader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
+		}
 	}
 
 
