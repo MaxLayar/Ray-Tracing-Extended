@@ -105,7 +105,8 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
                 float3 viewDir = WorldSpaceViewDir(vpos);
                 
                 float3 color = tex2D(_MainTex, input.texcoord);
-                return float4(color + SampleIrradianceField(wpos.xyz, normal, .9, viewDir),1);
+                float3 irradiance = SampleIrradianceField(wpos.xyz, normal, LBuffer[0].energyConservation, viewDir);
+                return float4(color + irradiance, 0);
             }
 
             ENDHLSL

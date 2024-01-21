@@ -59,6 +59,8 @@ public class DDGIController : MonoBehaviour
 	[Range(0f, 1f)]
 	public float hysteresis = 0.965f;
 
+	public float chebBias = 0;
+
 	public float depthSharpness = 50.0f;
 
 	[SerializeField] RenderTexture irradianceTex;
@@ -81,6 +83,9 @@ public class DDGIController : MonoBehaviour
 	public Light sun;
 
 	[Space(20), Header("     DEBUG"), Space(5)]
+
+	public int irradianceProbeSideLength = 6;
+	public int depthProbeSideLength = 14;
 
 	public bool debugShowProbes = false;
 	public bool isRealtimeRaytracing = false;
@@ -109,18 +114,19 @@ public class DDGIController : MonoBehaviour
 		(Vector3 minScene, Vector3 maxScene) = (volume.min, volume.max);
 		L = new();
 		L.probeCounts = numberOfProbes;
-		L.depthProbeSideLength = 14;
-		L.irradianceProbeSideLength = 4;
+		L.depthProbeSideLength = depthProbeSideLength;
+		L.irradianceProbeSideLength = irradianceProbeSideLength;
 		L.normalBias = 0.10f;
 		L.minRayDst = 0.00f;
 		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
 		L.irradianceTextureHeight = (L.irradianceProbeSideLength + 2) * L.probeCounts.z + 2;
 		L.depthTextureWidth = (L.depthProbeSideLength + 2) * L.probeCounts.x * L.probeCounts.y + 2;
 		L.depthTextureHeight = (L.depthProbeSideLength + 2) * L.probeCounts.z + 2;
-		L.probeStartPosition = minScene - Vector3.one;
-		L.probeStep = DivideVectors(maxScene - minScene + (Vector3.one * 1.3f),(L.probeCounts - Vector3.one));
+		L.probeStartPosition = minScene;
+		L.probeStep = DivideVectors(maxScene - minScene,(L.probeCounts - Vector3.one));
 		L.raysPerProbe = numRaysPerProbe;
 		L.energyConservation = energyConservation;
+		L.chebBias = chebBias;
 
 		CreateStructuredBuffer(ref lightFieldBuffer, new List<LightField>() { L });
 		computeRays.SetBuffer(0, "LBuffer", lightFieldBuffer);
@@ -329,9 +335,9 @@ public class DDGIController : MonoBehaviour
         probesPositions = new Vector3[numberOfProbes.x * numberOfProbes.y * numberOfProbes.z];
 
         int idx = 0;
-		for (int z = 0; z < numberOfProbes.z; z++)
+		for (int y = 0; y < numberOfProbes.y; y++)
 		{
-			for (int y = 0; y < numberOfProbes.y; y++)
+			for (int z = 0; z < numberOfProbes.z; z++)
 			{
 				for (int x = 0; x < numberOfProbes.x; x++)
 				{

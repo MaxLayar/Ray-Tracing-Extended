@@ -37,41 +37,6 @@ float3 gridCoordToPosition(int3 c) {
     return f + L.probeStartPosition;
 }
 
-
-int findMSB(int n)
-{
-    return (int)log2(n);
-}
-
-/*
-    Compute the grid coordinate of the probe from the index
-*/
-int3 probeIndexToGridCoord(int index) {
-    // Slow, but works for any # of probes
-    int3 iPos;
-    /*iPos.x = index % L.probeCounts.x;
-    iPos.y = (index % (L.probeCounts.x * L.probeCounts.y)) / L.probeCounts.x;
-    iPos.z = index / (L.probeCounts.x * L.probeCounts.y);
-    */
-
-    // Assumes probeCounts are powers of two.
-    // Saves ~10ms compared to the divisions above
-    // Precomputing the MSB actually slows this code down substantially
-    
-    iPos.x = index & (L.probeCounts.x - 1);
-    iPos.y = (index & ((L.probeCounts.x * L.probeCounts.y) - 1)) >> findMSB(L.probeCounts.x);
-    iPos.z = index >> findMSB(L.probeCounts.x * L.probeCounts.y);
-    
-    return iPos;
-}
-
-/*
-    Compute the 3D probe location in world space from the probe index
-*/
-float3 probeLocation(int index) {
-    return gridCoordToPosition(probeIndexToGridCoord(index));
-}
-
 int3 baseGridCoord(float3 X) {
     return clamp(int3((X - L.probeStartPosition) / L.probeStep),
                 int3(0, 0, 0), 
@@ -121,6 +86,7 @@ float2 textureCoordFromDirection(float3 dir, int probeIndex, int fullTextureWidt
 float3 SampleIrradianceField(float3 wsPosition, float3 wsN, float energyPreservation, in float3 viewVec)
 {  
     L = LBuffer[0];
+    
     // View vector
     float3 w_o = viewVec;
 

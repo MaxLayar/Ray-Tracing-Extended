@@ -73,7 +73,7 @@ void main(uint3 id : SV_DispatchThreadID)
 		int3 C = int3(r, relativeProbeID, 0);
 		float3 rayDirection    = rayDirections.Load(C).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz;// * L.energyConservation; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * 0.85; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = rayHitLocations.Load(C).xyz;
 
