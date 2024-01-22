@@ -14,7 +14,7 @@ public class DDGIController : MonoBehaviour
 	Vector3Int numberOfProbes;
     Vector3[] probesPositions;
     float realProbesSpacing;
-	int bufferDimension = 6;
+	bool isWriteOnesDone = false;
 
 	ComputeBuffer probesPositionsBuffer;
 
@@ -54,6 +54,7 @@ public class DDGIController : MonoBehaviour
 
 	[Space(20), Header("     Irradiance Settings"), Space(5)]
 	public ComputeShader computeIrradiance;
+	public ComputeShader computeBorders;
 	[Range(0f, 1f)]
 	public float energyConservation = 0.85f;
 	[Range(0f, 1f)]
@@ -101,10 +102,20 @@ public class DDGIController : MonoBehaviour
 	{
 		if (isRealtimeRaytracing)
 		{
+			if (!isWriteOnesDone){
+				UpdateProbesBorders(weightTex, L.depthProbeSideLength, 0); //set ones
+				UpdateProbesBorders(irradianceTex, L.irradianceProbeSideLength, 0); //set ones
+				isWriteOnesDone = true;
+			}
+
 			PrepareScene(computeRays);
 			ComputeProbesRays();
-			UpdateProbes(true);
-			UpdateProbes(false);
+			UpdateProbes(false); //weight
+			UpdateProbes(true); //irradiance
+
+			UpdateProbesBorders(weightTex, L.depthProbeSideLength, 1); //copy borders
+			UpdateProbesBorders(irradianceTex, L.irradianceProbeSideLength, 1); //copy borders
+
 			randomSeed++;
 		}
 	}
@@ -117,7 +128,7 @@ public class DDGIController : MonoBehaviour
 		L.depthProbeSideLength = depthProbeSideLength;
 		L.irradianceProbeSideLength = irradianceProbeSideLength;
 		L.normalBias = 0.10f;
-		L.minRayDst = 0.00f;
+		L.minRayDst = 0.05f;
 		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
 		L.irradianceTextureHeight = (L.irradianceProbeSideLength + 2) * L.probeCounts.z + 2;
 		L.depthTextureWidth = (L.depthProbeSideLength + 2) * L.probeCounts.x * L.probeCounts.y + 2;
@@ -157,7 +168,6 @@ public class DDGIController : MonoBehaviour
         computeRays.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
 
         computeRays.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
-        computeRays.SetInt("BufferDimension", bufferDimension);
         computeRays.SetInt("Frame", randomSeed);
         computeRays.SetInt("NumRaysPerProbe", numRaysPerProbe);
 
@@ -216,6 +226,16 @@ public class DDGIController : MonoBehaviour
 		int threadGroupsX = Mathf.CeilToInt((isOutputIrradiance ? L.irradianceTextureWidth : L.depthTextureWidth) / 8f);
 		int threadGroupsY = Mathf.CeilToInt((isOutputIrradiance ? L.irradianceTextureHeight : L.depthTextureHeight) / 8f);
 		computeIrradiance.Dispatch(0, threadGroupsX, threadGroupsY, 1);
+	}
+
+	void UpdateProbesBorders(RenderTexture probesTex, float probeSideLength, int kernelIndex)
+	{
+		computeBorders.SetTexture(kernelIndex, "tex", irradianceTex);
+		computeBorders.SetFloat("PROBE_SIDE_LENGTH", probeSideLength);
+
+		int threadGroupsX = Mathf.CeilToInt(probesTex.width / 8f);
+		int threadGroupsY = Mathf.CeilToInt(probesTex.height / 8f);
+		computeBorders.Dispatch(kernelIndex, threadGroupsX, threadGroupsY, 1);
 	}
 
 	private void RefreshBufferIfNeeded(ref RenderTexture buffer, string bufferName, int width, int heigh)
@@ -310,6 +330,7 @@ public class DDGIController : MonoBehaviour
         }
 
 		numRaysPerPixel = Mathf.Max(1, numRaysPerPixel);
+		isWriteOnesDone = false;
     }
 
     public void RefreshProbesPlacement()
