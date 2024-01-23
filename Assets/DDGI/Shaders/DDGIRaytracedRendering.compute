@@ -34,7 +34,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float4 color = info.material.colour;
-        float4 irradiance = float4(SampleIrradianceField(info.hitPoint, info.normal, LBuffer[0].energyConservation, ray.direction), 0);
+        float4 irradiance = float4(sampleIrradiance(DDGIVolumes[0], info.hitPoint, float3(0,0,0), info.normal, ray.direction, false, false, -1), 0); //SampleIrradianceField(info.hitPoint - ray.direction * 0.05, info.normal, 1.0, ray.direction), 0);
         Result[id.xy] = 
             //color +
             irradiance;

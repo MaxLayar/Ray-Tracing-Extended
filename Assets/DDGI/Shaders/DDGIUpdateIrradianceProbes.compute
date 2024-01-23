@@ -73,7 +73,7 @@ void main(uint3 id : SV_DispatchThreadID)
 		int3 C = int3(r, relativeProbeID, 0);
 		float3 rayDirection    = rayDirections.Load(C).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * 0.85; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * 1.0; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = rayHitLocations.Load(C).xyz;
 
@@ -81,7 +81,7 @@ void main(uint3 id : SV_DispatchThreadID)
         // Will be zero on a miss
 		float3 rayHitNormal    = rayHitNormals.Load(C).xyz;
 
-        rayHitLocation += rayHitNormal * 0.01f;
+        rayHitLocation += rayHitNormal * 0.08f;
 
 		float rayProbeDistance = min(uniforms[0].maxDistance, length(probeLocation - rayHitLocation));
         
@@ -113,7 +113,7 @@ void main(uint3 id : SV_DispatchThreadID)
 
     if (result.w > epsilon) {
         result.xyz /= result.w;
-        //result.w = 1.0f - uniforms[0].hysteresis;
+        result.w = 1.0f - uniforms[0].hysteresis;
     } // if nonzero
 
     float4 old = tex.Load(int3(texelPos,0));

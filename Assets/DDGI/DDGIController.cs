@@ -8,32 +8,57 @@ using UnityEngine;
 public class DDGIController : MonoBehaviour
 {
 	[Header("     Probes"), Space(5)]
-	public Bounds volume;
-    public float minProbesSpacing = 1f;
+	public Bounds boundsVolume;
+    public Vector3 minProbesSpacing = Vector3.one;
+	Vector3 realProbeSpacing = Vector3.one;
 
-	Vector3Int numberOfProbes;
     Vector3[] probesPositions;
-    float realProbesSpacing;
+	ComputeBuffer probesPositionsBuffer;
 	bool isWriteOnesDone = false;
 
-	ComputeBuffer probesPositionsBuffer;
+	[SerializeField] List<DDGIVolume> ddgiVolumes;
 
-	LightField L;
-	struct LightField
-	{
-		public Vector3Int probeCounts;
-		public int raysPerProbe;
-		public Vector3 probeStartPosition;
-		public float normalBias;
-		public Vector3 probeStep;
-		public int irradianceTextureWidth;
-		public int irradianceTextureHeight;
-		public int irradianceProbeSideLength;
-		public int depthTextureWidth;
-		public int depthTextureHeight;
-		public int depthProbeSideLength;
-		public float chebBias, minRayDst, energyConservation;
+	[System.Serializable]
+	struct DDGIVolume {
+		public Vector3Int              probeCounts;
+		public Vector3Int              logProbeCounts;
+		public Vector3          	   probeGridOrigin;
+		public Vector3          	   probeSpacing;
+		public Vector3          	   invProbeSpacing; // 1 / probeSpacing
+		public Vector3Int              phaseOffsets;
+		public Vector2Int              invIrradianceTextureSize;
+		public Vector2Int              invVisibilityTextureSize;
+		// probeOffsetLimit on [0,0.5] where max probe 
+		// offset = probeOffsetLimit * probeSpacing
+		// Usually 0.4, controllable from GUI.
+		[Range(0f,0.5f)]
+		public float                   probeOffsetLimit;
+		[Range(2,64)]
+		public int                     irradianceProbeSideLength;
+		[Range(2,64)]
+		public int                     visibilityProbeSideLength;
+		public float                   selfShadowBias;
+		[Range(0.01f, 10f)]
+		public float                   irradianceGamma;
+		public float                   invIrradianceGamma;
+		public float                   debugMeanBias; // 0 in production code
+		public float                   debugVarianceBias; // 0 in production code
+		public float                   debugChebyshevBias; // 0 in production code
+		public float                   debugChebyshevNormalize; // 1/(1-debugChebyshevBias) = 1 in production code
+		public int					   isCameraLocked;
+
+		[Range(0, 10000)]
+		public float 					depthSharpness;
+		[Range(0f,1f)]
+		public float 					hysteresis;
+		[Range(0f,1f)]
+		public float					energyConservation;
+		public float 					maxDistance;
 	};
+	[SerializeField] RenderTexture irradianceTexture;
+	[SerializeField] RenderTexture visibilityTexture;
+	[SerializeField] RenderTexture probeOffsetsTexture;
+	[SerializeField] RenderTexture probeOffsetsImage;
 
 	[Space(20), Header("     RayTracing"), Space(5)]
 	public ComputeShader computeRays;
@@ -41,7 +66,7 @@ public class DDGIController : MonoBehaviour
     public int numRaysPerProbe = 10;
 
 	//Buffers
-	ComputeBuffer lightFieldBuffer;
+	ComputeBuffer ddgiVolumesBuffer;
 	RenderTexture rayHitLocationsBuffer;
     RenderTexture rayHitRadianceBuffer;
     RenderTexture rayHitNormalsBuffer;
@@ -55,26 +80,8 @@ public class DDGIController : MonoBehaviour
 	[Space(20), Header("     Irradiance Settings"), Space(5)]
 	public ComputeShader computeIrradiance;
 	public ComputeShader computeBorders;
-	[Range(0f, 1f)]
-	public float energyConservation = 0.85f;
-	[Range(0f, 1f)]
-	public float hysteresis = 0.965f;
 
 	public float chebBias = 0;
-
-	public float depthSharpness = 50.0f;
-
-	[SerializeField] RenderTexture irradianceTex;
-	[SerializeField] RenderTexture weightTex;
-
-	ComputeBuffer uniformsBuffer;
-	Values V;
-	struct Values
-	{
-		public float depthSharpness;
-		public float hysteresis;
-		public float maxDistance;
-	}
 
 	[Space(20), Header("     Scene Objects"), Space(5)]
 	ComputeBuffer triangleBuffer;
@@ -97,14 +104,42 @@ public class DDGIController : MonoBehaviour
 	Texture2D hitNormalsDebugTexture;
 	Texture2D hitRadianceDebugTexture;
 
+	void OnEnable()
+	{
+		if (ddgiVolumes == null)
+			ddgiVolumes = new List<DDGIVolume>();
+
+		if (ddgiVolumes.Count == 0)
+			ddgiVolumes.Add(new DDGIVolume());
+		
+		for(int i = 0; i < ddgiVolumes.Count; i++)
+		{
+			if (!irradianceTexture)
+				RefreshBufferIfNeeded(ref irradianceTexture, "Irradiance", 1, 1);
+			if (!visibilityTexture)
+				RefreshBufferIfNeeded(ref visibilityTexture, "Visibility", 1, 1);
+			if (!probeOffsetsTexture)
+				RefreshBufferIfNeeded(ref probeOffsetsTexture, "Probe Offsets Texture", 1, 1);
+			if (!probeOffsetsImage)
+				RefreshBufferIfNeeded(ref probeOffsetsImage, "Probe Offsets Image", 1, 1);
+		}
+
+		NotifyOfCameraPosition(Camera.current ? Camera.current.transform.position : Camera.main.transform.position);
+	}
 
 	void Update()
 	{
 		if (isRealtimeRaytracing)
 		{
-			if (!isWriteOnesDone){
-				UpdateProbesBorders(weightTex, L.depthProbeSideLength, 0); //set ones
-				UpdateProbesBorders(irradianceTex, L.irradianceProbeSideLength, 0); //set ones
+			if (!isWriteOnesDone)
+			{
+				foreach(DDGIVolume ddgiVolume in ddgiVolumes)
+				{
+					if (visibilityTexture)
+						UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, 0); //set ones
+					if (irradianceTexture)
+						UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, 0); //set ones
+				}
 				isWriteOnesDone = true;
 			}
 
@@ -113,8 +148,13 @@ public class DDGIController : MonoBehaviour
 			UpdateProbes(false); //weight
 			UpdateProbes(true); //irradiance
 
-			UpdateProbesBorders(weightTex, L.depthProbeSideLength, 1); //copy borders
-			UpdateProbesBorders(irradianceTex, L.irradianceProbeSideLength, 1); //copy borders
+			foreach(DDGIVolume ddgiVolume in ddgiVolumes)
+			{
+				if (visibilityTexture)
+					UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, 1); //copy borders
+				if (irradianceTexture)
+					UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, 1); //copy borders
+			}
 
 			randomSeed++;
 		}
@@ -122,37 +162,37 @@ public class DDGIController : MonoBehaviour
 
 	public void ComputeProbesRays()
 	{
-		(Vector3 minScene, Vector3 maxScene) = (volume.min, volume.max);
-		L = new();
-		L.probeCounts = numberOfProbes;
-		L.depthProbeSideLength = depthProbeSideLength;
-		L.irradianceProbeSideLength = irradianceProbeSideLength;
-		L.normalBias = 0.10f;
-		L.minRayDst = 0.05f;
-		L.irradianceTextureWidth = (L.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * L.probeCounts.x * L.probeCounts.y + 2 /* 1px Border around whole texture left and right*/;
-		L.irradianceTextureHeight = (L.irradianceProbeSideLength + 2) * L.probeCounts.z + 2;
-		L.depthTextureWidth = (L.depthProbeSideLength + 2) * L.probeCounts.x * L.probeCounts.y + 2;
-		L.depthTextureHeight = (L.depthProbeSideLength + 2) * L.probeCounts.z + 2;
-		L.probeStartPosition = minScene;
-		L.probeStep = DivideVectors(maxScene - minScene,(L.probeCounts - Vector3.one));
-		L.raysPerProbe = numRaysPerProbe;
-		L.energyConservation = energyConservation;
-		L.chebBias = chebBias;
+		DDGIVolume copy = ddgiVolumes[0];
 
-		CreateStructuredBuffer(ref lightFieldBuffer, new List<LightField>() { L });
-		computeRays.SetBuffer(0, "LBuffer", lightFieldBuffer);
+		CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes);
+		computeRays.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
+
+		int irrW = (copy.irradianceProbeSideLength + 2) /* 1px Border around probe left and right */ * copy.probeCounts.x * copy.probeCounts.y + 2; /* 1px Border around whole texture left and right*/
+		int irrH = (copy.irradianceProbeSideLength + 2) * copy.probeCounts.z + 2;
+		int visW = (copy.visibilityProbeSideLength + 2) * copy.probeCounts.x * copy.probeCounts.y + 2;
+		int visH = (copy.visibilityProbeSideLength + 2) * copy.probeCounts.z + 2;
+
+		RefreshBufferIfNeeded(ref irradianceTexture, "irradianceTexture", irrW, irrH);
+		RefreshBufferIfNeeded(ref visibilityTexture, "visibilityTexture", visW, visH);
+		RefreshBufferIfNeeded(ref probeOffsetsTexture, "probeOffsetsTexture", visW, visH);
+		RefreshBufferIfNeeded(ref probeOffsetsImage, "probeOffsetsImage", visW, visH);
+
+		computeRays.SetTexture(0, "irradianceTexture", irradianceTexture);
+		computeRays.SetTexture(0, "visibilityTexture", visibilityTexture);
+		computeRays.SetTexture(0, "probeOffsetsTexture", probeOffsetsTexture);
+		computeRays.SetTexture(0, "probeOffsetsImage", probeOffsetsImage);
+
+		computeRays.SetInt("OFFSET_BITS_PER_CHANNEL", 8); //probeOffsetsTexture->format()->redBits
+
 
 		int surfelWidth = numRaysPerProbe;
-	    int surfelHeight = numberOfProbes.x * numberOfProbes.y * numberOfProbes.z;
+	    int surfelHeight = Mathf.Max(copy.probeCounts.x * copy.probeCounts.y * copy.probeCounts.z, 1);
 
 		RefreshBufferIfNeeded(ref rayHitLocationsBuffer, "rayHitLocations", surfelWidth, surfelHeight);
 		RefreshBufferIfNeeded(ref rayHitRadianceBuffer, "rayHitRadiance", surfelWidth, surfelHeight);
 		RefreshBufferIfNeeded(ref rayHitNormalsBuffer, "rayHitNormals", surfelWidth, surfelHeight);
 		RefreshBufferIfNeeded(ref rayDirectionsBuffer, "rayDirections", surfelWidth, surfelHeight);
 		RefreshBufferIfNeeded(ref rayOriginsBuffer, "rayOrigins", surfelWidth, surfelHeight);
-
-		RefreshBufferIfNeeded(ref irradianceTex, "irradianceTex", L.irradianceTextureWidth, L.irradianceTextureHeight);
-		RefreshBufferIfNeeded(ref weightTex, "weightTex", L.depthTextureWidth, L.depthTextureHeight);
 
 		// Set the buffers to your compute shader material
 		computeRays.SetTexture(0, "rayHitLocations", rayHitLocationsBuffer);
@@ -161,14 +201,9 @@ public class DDGIController : MonoBehaviour
         computeRays.SetTexture(0, "rayDirections", rayDirectionsBuffer);
         computeRays.SetTexture(0, "rayOrigins", rayOriginsBuffer);
 
-		computeRays.SetTexture(0, "irradianceTex", irradianceTex);
-		computeRays.SetTexture(0, "weightTex", weightTex);
-
 		CreateStructuredBuffer(ref probesPositionsBuffer, probesPositions.ToList());
         computeRays.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
 
-        computeRays.SetVector("NumProbes", new Vector4(numberOfProbes.x, numberOfProbes.z, numberOfProbes.y, 0));
-        computeRays.SetInt("Frame", randomSeed);
         computeRays.SetInt("NumRaysPerProbe", numRaysPerProbe);
 
 		if (isRandomDirection)
@@ -190,10 +225,10 @@ public class DDGIController : MonoBehaviour
         computeRays.Dispatch(0, threadGroupsX, threadGroupsY, 1);
 	}
 
-
-	public void UpdateProbes(bool isOutputIrradiance)
+    public void UpdateProbes(bool isOutputIrradiance)
 	{
-		computeIrradiance.SetFloat("PROBE_SIDE_LENGTH", isOutputIrradiance ? L.irradianceProbeSideLength : L.depthProbeSideLength);
+		DDGIVolume copy = ddgiVolumes[0];
+		
 		computeIrradiance.SetInt("RAYS_PER_PROBE", numRaysPerProbe);
 
 		if (isOutputIrradiance)
@@ -211,26 +246,17 @@ public class DDGIController : MonoBehaviour
 
 		computeIrradiance.SetTexture(0, "rayDirections", rayDirectionsBuffer);
 
-		V = new();
-		V.depthSharpness = depthSharpness;
-		V.hysteresis = hysteresis;
-		Vector3 probeEnd = L.probeStartPosition + MultiplyVectors(new Vector3(L.probeCounts.x - 1, L.probeCounts.y - 1, L.probeCounts.z -1), L.probeStep);
-		Vector3 probeSpan = probeEnd - L.probeStartPosition;
-		V.maxDistance = Vector3.Magnitude(DivideVectors(probeSpan, L.probeCounts)) * 1.5f;
-
-		CreateStructuredBuffer(ref uniformsBuffer, new List<Values>() { V });
-		computeIrradiance.SetBuffer(0, "uniforms", uniformsBuffer);
-		computeIrradiance.SetTexture(0, "tex", isOutputIrradiance ? irradianceTex : weightTex);
+		computeIrradiance.SetTexture(0, "tex", isOutputIrradiance ? irradianceTexture : visibilityTexture);
 
 		// Dispatch your compute shader
-		int threadGroupsX = Mathf.CeilToInt((isOutputIrradiance ? L.irradianceTextureWidth : L.depthTextureWidth) / 8f);
-		int threadGroupsY = Mathf.CeilToInt((isOutputIrradiance ? L.irradianceTextureHeight : L.depthTextureHeight) / 8f);
+		int threadGroupsX = Mathf.CeilToInt((isOutputIrradiance ? irradianceTexture.width : visibilityTexture.width) / 8f);
+		int threadGroupsY = Mathf.CeilToInt((isOutputIrradiance ? irradianceTexture.height : visibilityTexture.height) / 8f);
 		computeIrradiance.Dispatch(0, threadGroupsX, threadGroupsY, 1);
 	}
 
 	void UpdateProbesBorders(RenderTexture probesTex, float probeSideLength, int kernelIndex)
 	{
-		computeBorders.SetTexture(kernelIndex, "tex", irradianceTex);
+		computeBorders.SetTexture(kernelIndex, "tex", probesTex);
 		computeBorders.SetFloat("PROBE_SIDE_LENGTH", probeSideLength);
 
 		int threadGroupsX = Mathf.CeilToInt(probesTex.width / 8f);
@@ -324,10 +350,19 @@ public class DDGIController : MonoBehaviour
 
     private void OnValidate()
     {
-        if (minProbesSpacing != realProbesSpacing)
-        {
-            RefreshProbesPlacement();
-        }
+		minProbesSpacing = Vector3.Max(minProbesSpacing, new Vector3(.05f,.05f,.05f));
+        //if (minProbesSpacing != realProbeSpacing)
+		RefreshProbesPlacement();
+
+		DDGIVolume copy = ddgiVolumes[0];
+		copy.invIrradianceTextureSize = DivideVectors(Vector2Int.one, new Vector2Int(irradianceTexture.width, irradianceTexture.height));
+		copy.invVisibilityTextureSize = DivideVectors(Vector2Int.one, new Vector2Int(visibilityTexture.width, visibilityTexture.height));;
+		copy.invIrradianceGamma = 1.0f / copy.irradianceGamma; 
+
+		Vector3 probeEnd = copy.probeGridOrigin + MultiplyVectors(copy.probeCounts - Vector3Int.one, copy.probeSpacing);
+		Vector3 probeSpan = probeEnd - copy.probeGridOrigin;
+		copy.maxDistance = Vector3.Magnitude(DivideVectors(probeSpan, copy.probeCounts)) * 1.5f;
+		ddgiVolumes[0] = copy;
 
 		numRaysPerPixel = Mathf.Max(1, numRaysPerPixel);
 		isWriteOnesDone = false;
@@ -337,37 +372,54 @@ public class DDGIController : MonoBehaviour
     {
         Debug.Log($"Refresh probes placement with a distance of {minProbesSpacing}.");
 
-        numberOfProbes = new(
-            Mathf.CeilToInt(volume.size.x / minProbesSpacing),
-            Mathf.CeilToInt(volume.size.y / minProbesSpacing),
-            Mathf.CeilToInt(volume.size.z / minProbesSpacing)
+		DDGIVolume copy = ddgiVolumes[0];
+
+        copy.probeCounts = new(
+            Mathf.CeilToInt(boundsVolume.size.x / minProbesSpacing.x),
+            Mathf.CeilToInt(boundsVolume.size.y / minProbesSpacing.y),
+            Mathf.CeilToInt(boundsVolume.size.z / minProbesSpacing.z)
         );
 
-        Vector3 spacing = new(
-            volume.size.x / (numberOfProbes.x - 1),
-            volume.size.y / (numberOfProbes.y - 1),
-            volume.size.z / (numberOfProbes.z - 1)
+        copy.probeSpacing = new(
+            boundsVolume.size.x / (copy.probeCounts.x - 1),
+            boundsVolume.size.y / (copy.probeCounts.y - 1),
+            boundsVolume.size.z / (copy.probeCounts.z - 1)
         );
 
-        spacing.x = (float.IsInfinity(spacing.x) || float.IsNaN(spacing.x)) ? 0 : spacing.x;
-        spacing.y = (float.IsInfinity(spacing.y) || float.IsNaN(spacing.y)) ? 0 : spacing.y;
-        spacing.z = (float.IsInfinity(spacing.z) || float.IsNaN(spacing.z)) ? 0 : spacing.z;
+        copy.probeSpacing.x *= IsValid(copy.probeSpacing.x);
+        copy.probeSpacing.y *= IsValid(copy.probeSpacing.y);
+        copy.probeSpacing.z *= IsValid(copy.probeSpacing.z);
 
-        probesPositions = new Vector3[numberOfProbes.x * numberOfProbes.y * numberOfProbes.z];
+        probesPositions = new Vector3[copy.probeCounts.x * copy.probeCounts.y * copy.probeCounts.z];
 
         int idx = 0;
-		for (int y = 0; y < numberOfProbes.y; y++)
+		for (int z = 0; z < copy.probeCounts.z; z++)
 		{
-			for (int z = 0; z < numberOfProbes.z; z++)
+			for (int y = 0; y < copy.probeCounts.y; y++)
 			{
-				for (int x = 0; x < numberOfProbes.x; x++)
+				for (int x = 0; x < copy.probeCounts.x; x++)
 				{
-					probesPositions[idx++] = volume.center - volume.extents + new Vector3(x * spacing.x, y * spacing.y, z * spacing.z);
+					probesPositions[idx++] = boundsVolume.center - boundsVolume.extents + new Vector3(x * copy.probeSpacing.x, y * copy.probeSpacing.y, z * copy.probeSpacing.z);
 				}
 			}
 		}
 
-        realProbesSpacing = minProbesSpacing;
+		copy.logProbeCounts = new Vector3Int(
+			Mathf.FloorToInt(Mathf.Log(copy.probeCounts.x)),
+			Mathf.FloorToInt(Mathf.Log(copy.probeCounts.y)),
+			Mathf.FloorToInt(Mathf.Log(copy.probeCounts.z))
+		);
+
+		copy.probeGridOrigin = boundsVolume.min;
+		copy.invProbeSpacing = Vector3.Max(DivideVectors(Vector3.one, copy.probeSpacing), Vector3.zero);
+
+        realProbeSpacing = minProbesSpacing;
+		ddgiVolumes[0] = copy;
+
+		int IsValid(float spacing)
+		{
+			return !(float.IsInfinity(spacing) || float.IsNaN(spacing)) ? 1 : 0;
+		}
     }
 
     private void OnDrawGizmos()
@@ -457,16 +509,23 @@ public class DDGIController : MonoBehaviour
 		return new Vector3(a.x / b.x, a.y / b.y, a.z / b.z);
 	}
 
+	private static Vector2Int DivideVectors(Vector2Int a, Vector2Int b)
+	{
+		return new Vector2Int(a.x / b.x, a.y / b.y);
+	}
+
 	public void ResetBuffers()
 	{
-		ClearOutRenderTexture(weightTex);
-		ClearOutRenderTexture(irradianceTex);
+		ClearOutRenderTexture(visibilityTexture);
+		ClearOutRenderTexture(irradianceTexture);
 
 		ClearOutRenderTexture(rayHitLocationsBuffer);
 		ClearOutRenderTexture(rayHitRadianceBuffer);
 		ClearOutRenderTexture(rayHitNormalsBuffer);
 		ClearOutRenderTexture(rayDirectionsBuffer);
 		ClearOutRenderTexture(rayOriginsBuffer);
+
+		ClearOutRenderTexture(resultTexture);
 	}
 
 	public void ClearOutRenderTexture(RenderTexture renderTexture)
@@ -479,7 +538,7 @@ public class DDGIController : MonoBehaviour
 
 
 
-	   [Header("Ray Tracing Settings")]
+	[Header("Ray Tracing Settings")]
 	[SerializeField, Range(0, 64)] int numRaysPerPixel = 2;
 
 
@@ -537,17 +596,19 @@ public class DDGIController : MonoBehaviour
 	{
 		if (!isRaytracingRendering)
 		{
-			Camera.current.depthTextureMode = DepthTextureMode.Depth;
+			Camera cam = Camera.current;
+			cam.depthTextureMode = DepthTextureMode.Depth;
 
 			// Create materials used in blits
 			ShaderHelper.InitMaterial(rasterizedDDGIShader, ref blitMaterial);
 
-			blitMaterial.SetBuffer("LBuffer", lightFieldBuffer);
+			blitMaterial.SetBuffer("DDGIVolumes", ddgiVolumesBuffer);
 
-			blitMaterial.SetTexture("irradianceTex", irradianceTex);
-			blitMaterial.SetTexture("weightTex", weightTex);
+			blitMaterial.SetTexture("irradianceTex", irradianceTexture);
+			blitMaterial.SetTexture("weightTex", visibilityTexture);
 
-			blitMaterial.SetMatrix("_InverseView", Camera.current.cameraToWorldMatrix);
+			blitMaterial.SetMatrix("_InverseView", cam.cameraToWorldMatrix);
+			//blitMaterial.SetMatrix("", (cam.projectionMatrix * cam.worldToCameraMatrix).inverse.transpose);
 		}
 		else
 		{
@@ -555,10 +616,10 @@ public class DDGIController : MonoBehaviour
 			RefreshBufferIfNeeded(ref resultTexture, "Result", cam.scaledPixelWidth, cam.scaledPixelHeight);
 			raytracedDDGIShader.SetTexture(0, "Result", resultTexture);
 
-			raytracedDDGIShader.SetBuffer(0, "LBuffer", lightFieldBuffer);
+			raytracedDDGIShader.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
-			raytracedDDGIShader.SetTexture(0, "irradianceTex", irradianceTex);
-			raytracedDDGIShader.SetTexture(0, "weightTex", weightTex);
+			raytracedDDGIShader.SetTexture(0, "irradianceTex", irradianceTexture);
+			raytracedDDGIShader.SetTexture(0, "weightTex", visibilityTexture);
 
 			// Set camera parameters
 			float planeHeight = cam.farClipPlane * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * 2;
@@ -581,6 +642,58 @@ public class DDGIController : MonoBehaviour
 	{
 		ShaderHelper.Release(resultTexture);
 	}
+
+	
+
+	public bool NotifyOfCameraPosition(Vector3 cameraWSPosition)
+	{
+		DDGIVolume copy = ddgiVolumes[0];
+		if (copy.isCameraLocked == 0)
+			return false;
+
+		// Centerpoint of the volume.
+		Vector3 volumeCenter = copy.probeGridOrigin + MultiplyVectors(copy.probeSpacing, (copy.probeCounts - new Vector3(1, 1, 1)) / 2.0f);
+		Bounds volumeCenterRegion = new Bounds(volumeCenter, copy.probeSpacing * 2.0f);
+
+		// If the camera is within our center volume, don't need to move.
+		if (volumeCenterRegion.Contains(cameraWSPosition))
+			return false;
+
+		// Move 2 probeSpacing lengths along the axis that would get the camera closest to the new centerpoint
+
+		// Distance to center, pointing towards the camera to make computation easier.
+		Vector3 vectorToCenter = cameraWSPosition - volumeCenter;
+
+		Vector3Int[] movementOptions = {
+			new Vector3Int(1, 0, 0),
+			new Vector3Int(-1, 0, 0),
+			new Vector3Int(0, 1, 0),
+			new Vector3Int(0, -1, 0),
+			new Vector3Int(0, 0, 1),
+			new Vector3Int(0, 0, -1)
+		};
+
+		int index = -1;
+		float length = vectorToCenter.magnitude;
+		for (int i = 0; i < movementOptions.Length; ++i)
+		{
+			float newLength = (vectorToCenter - MultiplyVectors(movementOptions[i], copy.probeSpacing)).magnitude;
+			if (newLength < length)
+			{
+				length = newLength;
+				index = i;
+			}
+		}
+
+		copy.probeGridOrigin += MultiplyVectors(movementOptions[index], copy.probeSpacing);
+
+		// Phase offset works opposite the motion of the camera.
+		copy.phaseOffsets -= movementOptions[index];
+
+		ddgiVolumes[0] = copy;
+		return true;
+	}
+
 }
 
 

@@ -9,6 +9,7 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
     sampler2D _CameraGBufferTexture2;
 
     float4x4 _InverseView;
+    float4x4 _ViewProjInv;
 
     struct Varyings
     {
@@ -79,6 +80,17 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
         return lerp(vposPers, vposOrtho, isOrtho) * mask;
     }
 
+    // https://github.com/DiligentGraphics/DiligentSamples/blob/master/Tutorials/Tutorial22_HybridRendering/assets/Utils.fxh
+    float3 ScreenPosToWorldPos(float2 ScreenSpaceUV)
+    {
+        float4 PosClipSpace;
+        PosClipSpace.xy = ScreenSpaceUV * float2(2.0, -2.0) + float2(-1.0, 1.0);
+        PosClipSpace.z = tex2D(_CameraDepthTexture, ScreenSpaceUV);
+        PosClipSpace.w = 1.0;
+        float4 WorldPos = mul(PosClipSpace, _ViewProjInv);
+        return WorldPos.xyz / WorldPos.w;
+    }
+
     ENDHLSL
     Properties
     {
@@ -96,17 +108,21 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 
             half4 Fragment(Varyings input) : SV_Target
             {
-                float3 normal = tex2D(_CameraGBufferTexture2, input.texcoord);
-                //normal = UnityObjectToWorldNormal(normal);
+                float3 wNormal = tex2D(_CameraGBufferTexture2, input.texcoord);
 
                 float4 vpos = float4(ComputeViewSpacePosition(input), 1);
                 float4 wpos = mul(_InverseView, vpos);
 
-                float3 viewDir = WorldSpaceViewDir(vpos);
-                
+                float3 viewDir = normalize(UnityWorldSpaceViewDir(wpos));
+                //return float4(_WorldSpaceCameraPos, 1);
+
                 float3 color = tex2D(_MainTex, input.texcoord);
-                float3 irradiance = SampleIrradianceField(wpos.xyz, normal, LBuffer[0].energyConservation, viewDir);
-                return float4(color + irradiance, 0);
+                float3 irradiance = sampleIrradiance(DDGIVolumes[0], wpos, float3(1,1,0), wNormal, _WorldSpaceCameraPos, false, false, -1);
+                //SampleIrradianceField(wpos, wNormal, 1.0, _WorldSpaceCameraPos); //viewDir);
+                return float4(
+                    //color + 
+                    irradiance
+                    , 0);
             }
 
             ENDHLSL

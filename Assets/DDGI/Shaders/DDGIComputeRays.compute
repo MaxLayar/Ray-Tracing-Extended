@@ -68,9 +68,7 @@ float3 Shade(SurfaceOutputStandard s, float3 viewVec) {
 
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID) 
-{
-    L = LBuffer[0];
-    
+{   
     uint2 texelPos = uint2(id.x, id.y);
 
     uint2 dim;
@@ -88,12 +86,13 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
-        float4 indirectL = float4(SampleIrradianceField(info.hitPoint, info.normal, L.energyConservation, viewVec), 1);
+        float4 indirectL = float4(sampleIrradiance(DDGIVolumes[0], info.hitPoint, float3(0,0,0), info.normal, viewVec, false, false, -1), 1);
+            //sampleIrradiance(DDGIVolumes[0], info.hitPoint, info.normal, DDGIVolumes[0].energyConservation, viewVec), 1);
         
         HitInfo shadowHit;
         Ray shadowRay;
         shadowRay.direction = -sunDirection;
-        shadowRay.origin = info.hitPoint + (info.normal * L.normalBias);
+        shadowRay.origin = info.hitPoint + (info.normal * DDGIVolumes[0].selfShadowBias);
         shadowRay.tMin = 0.01;
         shadowRay.tMax = 1000.0;
         int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
@@ -103,7 +102,7 @@ void main(uint3 id : SV_DispatchThreadID)
         SurfaceOutputStandard s;
         s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
         s.Normal = info.normal;
-        s.Emission = info.material.emissionColour;
+        s.Emission = info.material.emissionColour * info.material.emissionStrength;
         s.Metallic = info.material.specularProbability; // 0=non-metal, 1=metal
         s.Smoothness = info.material.smoothness; // 0=rough, 1=smooth
         s.Occlusion = 0; // occlusion (default 1)

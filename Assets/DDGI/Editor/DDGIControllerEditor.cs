@@ -18,8 +18,8 @@ public class DDGIControllerEditor : Editor
     protected virtual void OnSceneGUI()
     {
         // copy the target object's data to the handle
-        m_BoundsHandle.center = ddgiController.volume.center;
-        m_BoundsHandle.size = ddgiController.volume.size;
+        m_BoundsHandle.center = ddgiController.boundsVolume.center;
+        m_BoundsHandle.size = ddgiController.boundsVolume.size;
 
         // draw the handle
         EditorGUI.BeginChangeCheck();
@@ -35,7 +35,7 @@ public class DDGIControllerEditor : Editor
                 center = m_BoundsHandle.center,
                 size = m_BoundsHandle.size
             };
-            ddgiController.volume = newBounds;
+            ddgiController.boundsVolume = newBounds;
 
             ddgiController.RefreshProbesPlacement();
         }
