@@ -1,52 +1,16 @@
-#include "OctahedralUtilities.cginc"
 #include "UnityShaderVariables.cginc"
 #include "UnityShaderUtilities.cginc"
 #include "UnityInstancing.cginc"
+
+#include "OctahedralUtilities.cginc"
+#include "ShaderUtilities.cginc"
+#include "ShaderVariables.cginc"
 
 #define M_PI 3.1415926535897932384626433832795
 #define NUM_DDGIVOLUMES 1
 
 int OFFSET_BITS_PER_CHANNEL;
 float highestSignedValue;
- 
-struct DDGIVolume {
-    int3    probeCounts;
-    int3    logProbeCounts;
-    float3  probeGridOrigin;
-    float3  probeSpacing;
-    float3  invProbeSpacing; // 1 / probeSpacing
-    int3    phaseOffsets;
-    uint2   invIrradianceTextureSize;
-    uint2   invVisibilityTextureSize;
-    // probeOffsetLimit on [0,0.5] where max probe 
-    // offset = probeOffsetLimit * probeSpacing
-    // Usually 0.4, controllable from GUI.
-    float   probeOffsetLimit;
-    int     irradianceProbeSideLength;
-    int     visibilityProbeSideLength;
-    float   selfShadowBias;
-    float   irradianceGamma;
-    float   invIrradianceGamma;
-
-    //DEBUG
-    float   debugMeanBias; // 0 in production code
-    float   debugVarianceBias; // 0 in production code
-    float   debugChebyshevBias; // 0 in production code
-    float   debugChebyshevNormalize; // 1/(1-debugChebyshevBias) = 1 in production code
-	int	    cameraLocked;
-
-    float energyConservation;
-    float depthSharpness;
-    float hysteresis;
-    float maxDistance;
-};
-
-StructuredBuffer<DDGIVolume> DDGIVolumes;
-
-RWTexture2D<float4> irradianceTexture;
-RWTexture2D<float4> visibilityTexture;
-RWTexture2D<float4> probeOffsetsTexture;
-RWTexture2D<float4> probeOffsetsImage;
 
 /** 
  \param probeCoords Integer (stored in float) coordinates of the probe on the probe grid 
@@ -143,12 +107,12 @@ int nearestProbeIndex(in DDGIVolume ddgiVolume, float3 X, out float3 probeCoords
 
 
 float4 readProbeOffset(in DDGIVolume ddgiVolume, int2 texelCoord) {
-    float4 v = probeOffsetsTexture.Load(texelCoord);
+    float4 v = Load(probeOffsetsTexture, texelCoord, probeOffsetsTextureSize);
     return float4(v.xyz * ddgiVolume.probeOffsetLimit * ddgiVolume.probeSpacing / highestSignedValue, v.w);
 }
 
 void writeProbeOffset(in DDGIVolume ddgiVolume, in int2 texelCoord, in float4 offsetAndFlags) {
-    probeOffsetsImage[texelCoord] = int4(int3(ceil(highestSignedValue * offsetAndFlags.xyz * ddgiVolume.invProbeSpacing / ddgiVolume.probeOffsetLimit)), offsetAndFlags.w);
+    Write(probeOffsetsImage, texelCoord, probeOffsetsImageSize, int4(int3(ceil(highestSignedValue * offsetAndFlags.xyz * ddgiVolume.invProbeSpacing / ddgiVolume.probeOffsetLimit)), offsetAndFlags.w));
 }
 
 // Apply the per-axis phase offset to derive the correct location for each probe.
@@ -161,17 +125,16 @@ float3 gridCoordToPositionNoOffset(in DDGIVolume ddgiVolume, int3 c) {
 float3 gridCoordToPosition(in DDGIVolume ddgiVolume, int3 c) {
 
     //Add per-probe offset
-    int idx = gridCoordToProbeIndex(ddgiVolume, c);
-    int probeXY = ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y;
-    int2 C = int2(idx % probeXY, idx / probeXY);
+    uint idx = gridCoordToProbeIndex(ddgiVolume, c);
+    float probeXY = ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y;
+    int2 C = probeXY != 0 ? int2(modf(idx, probeXY), idx / probeXY) : int2(0, 0);
 
     float3 offset =
 #if FIRST_FRAME
-        int3(0)
+        int3(0);
 #else
         readProbeOffset(ddgiVolume, C).xyz; // readProbeOffset multiplies by probe step.
 #endif
-        ;
     return gridCoordToPositionNoOffset(ddgiVolume, c) + offset;
 }
 
@@ -190,7 +153,7 @@ float square(float f)
     return f * f;
 }
 
-float3 square3(float3 f)
+float3 square(float3 f)
 {
     return float3(f.x * f.x, f.y * f.y, f.z * f.z);
 }
@@ -204,6 +167,7 @@ float pow(float a, float b)
 {
     return exp(a * log(b));
 }
+
 float3 pow(float3 f, float3 x)
 {
     return float3(pow(f.x, x.x), pow(f.y, x.y), pow(f.z, x.z));
@@ -363,7 +327,7 @@ float4 sampleOneDDGIVolume
 
 		// Because of the phase offset applied for camera locked volumes,
 		// we need to add the computed offset modulo the probecounts.
-		int3  probeGridCoord = int3((anchorGridCoord + offset) % ddgiVolume.probeCounts);
+        int3 probeGridCoord = int3(modf((anchorGridCoord + offset), ddgiVolume.probeCounts));
 
         // Make cosine falloff in tangent plane with respect to the angle from the surface to the probe so that we never
         // test a probe that is *behind* the surface.
@@ -408,7 +372,7 @@ float4 sampleOneDDGIVolume
         if (! debugDisableChebyshev) {
             float2 texCoord = probeTextureCoordFromDirection(probeToBiasedPointDirection, probeGridCoord, false, ddgiVolume);
 
-            float2 temp = visibilityTexture.Load(texCoord).xy;
+            float2 temp = Load(visibilityTexture, texCoord, visibilityTextureSize).xy;
             float meanDistanceToOccluder = temp.x;
             float variance = abs(square(temp.x) - temp.y);
 
@@ -451,7 +415,7 @@ float4 sampleOneDDGIVolume
       
 		weight = weight * trilinear;
                
-        float3 probeIrradiance = irradianceTexture.Load(texCoord).rgb;
+        float3 probeIrradiance = Load(irradianceTexture, texCoord, irradianceTextureSize).rgb;
 
         // Decode the tone curve, but leave a gamma = 2 curve (=sqrt here) to approximate sRGB blending for the trilinear
         float comp = ddgiVolume.irradianceGamma * 0.5;

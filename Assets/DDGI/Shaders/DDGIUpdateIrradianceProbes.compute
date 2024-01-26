@@ -1,8 +1,8 @@
 #pragma kernel main
 #pragma multi_compile_local __ OUTPUT_IRRADIANCE
 #include "OctahedralUtilities.cginc"
+#include "ShaderVariables.cginc"
 
-float PROBE_SIDE_LENGTH;
 int RAYS_PER_PROBE;
 
 RWTexture2D<float4> tex;
@@ -15,15 +15,7 @@ Texture2D rayOrigins;
 #endif
 Texture2D rayDirections;
 
-struct Values
-{
-    float depthSharpness;
-    float hysteresis;
-    float maxDistance;
-};
-
-StructuredBuffer<Values> uniforms;
-
+int PROBE_SIDE_LENGTH;
 
 int probeID(float2 texelXY, uint width) {
     int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
@@ -51,6 +43,12 @@ float square(float f)
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID)
 {
+#ifdef OUTPUT_IRRADIANCE
+    PROBE_SIDE_LENGTH = DDGIVolumes[0].irradianceProbeSideLength;
+#else
+    PROBE_SIDE_LENGTH = DDGIVolumes[0].visibilityProbeSideLength;
+#endif
+    
     float epsilon = 1e-6;
     uint2 texelPos = uint2(id.x, id.y);
 
@@ -83,11 +81,11 @@ void main(uint3 id : SV_DispatchThreadID)
 
         rayHitLocation += rayHitNormal * 0.08f;
 
-		float rayProbeDistance = min(uniforms[0].maxDistance, length(probeLocation - rayHitLocation));
+		float rayProbeDistance = min(DDGIVolumes[0].maxDistance, length(probeLocation - rayHitLocation));
         
         // Detect misses and force depth
 		if (dot(rayHitNormal, rayHitNormal) < epsilon) {
-            rayProbeDistance = uniforms[0].maxDistance;
+            rayProbeDistance = DDGIVolumes[0].maxDistance;
         }
 #endif
 
@@ -95,7 +93,7 @@ void main(uint3 id : SV_DispatchThreadID)
 #ifdef OUTPUT_IRRADIANCE
         float weight = max(0.0, dot(texelDirection, rayDirection));
 #else
-        float weight = pow(max(0.0, dot(texelDirection, rayDirection)), uniforms[0].depthSharpness);
+        float weight = pow(max(0.0, dot(texelDirection, rayDirection)), DDGIVolumes[0].depthSharpness);
 #endif
         if (weight >= epsilon) {
             // Storing the sum of the weights in alpha temporarily
@@ -113,9 +111,9 @@ void main(uint3 id : SV_DispatchThreadID)
 
     if (result.w > epsilon) {
         result.xyz /= result.w;
-        result.w = 1.0f - uniforms[0].hysteresis;
+        result.w = 1.0f - DDGIVolumes[0].hysteresis;
     } // if nonzero
 
     float4 old = tex.Load(int3(texelPos,0));
-    tex[texelPos] = lerp(old,result,1.0f-uniforms[0].hysteresis);
+    tex[texelPos] = lerp(old, result, 1.0f - DDGIVolumes[0].hysteresis);
 }
