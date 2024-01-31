@@ -1,19 +1,30 @@
 #pragma kernel main
-#pragma multi_compile_local __ OUTPUT_IRRADIANCE
+#pragma multi_compile __ OUTPUT_IRRADIANCE
+#pragma multi_compile __ DEBUG_MODE
+#pragma multi_compile __ OUTPUT_IRRADIANCE DEBUG_MODE
+
 #include "OctahedralUtilities.cginc"
 #include "ShaderVariables.cginc"
+#include "ShaderUtilities.cginc"
 
 int RAYS_PER_PROBE;
 
-RWTexture2D<float4> tex;
-#ifdef OUTPUT_IRRADIANCE
-Texture2D rayHitRadiance;
-#else
-Texture2D rayHitLocations;
-Texture2D rayHitNormals;
-Texture2D rayOrigins;
+#ifdef DEBUG_MODE
+RWTexture2D<float4> debugTex;
 #endif
-Texture2D rayDirections;
+
+RWStructuredBuffer<float4> outputBuffer;
+uint2 outputBufferSize;
+
+#ifdef OUTPUT_IRRADIANCE
+RWStructuredBuffer<float4> rayHitRadiance;
+#else
+RWStructuredBuffer<float4> rayHitLocations;
+RWStructuredBuffer<float4> rayHitNormals;
+RWStructuredBuffer<float4> rayOrigins;
+#endif
+RWStructuredBuffer<float4> rayDirections;
+uint2 surfelsTextureSize;
 
 int PROBE_SIDE_LENGTH;
 
@@ -53,14 +64,15 @@ void main(uint3 id : SV_DispatchThreadID)
     uint2 texelPos = uint2(id.x, id.y);
 
     float4 result = float4(0,0,0,0);
-    uint2 dim;
-    tex.GetDimensions(dim.x,dim.y);
 
-    if(texelPos.x >= dim.x -1 || texelPos.y >= dim.y -1 || texelPos.x < 1 || texelPos.y < 1) return;
-    int relativeProbeID = probeID(texelPos.xy, dim.x);
+    if(texelPos.x >= outputBufferSize.x -1 || texelPos.y >= outputBufferSize.y -1 || texelPos.x < 1 || texelPos.y < 1) return;
+    int relativeProbeID = probeID(texelPos, outputBufferSize.x);
 
     if (relativeProbeID == -1) {
-        tex[texelPos] = float4(0.0f,0.f,0.f,0.f);
+        Write(outputBuffer, texelPos, outputBufferSize, result);
+        #ifdef DEBUG_MODE
+        debugTex[texelPos] = result;
+        #endif
         return;
     }
 
@@ -68,16 +80,16 @@ void main(uint3 id : SV_DispatchThreadID)
 
     // For each ray
 	for (int r = 0; r < RAYS_PER_PROBE; ++r) {
-		int3 C = int3(r, relativeProbeID, 0);
-		float3 rayDirection    = rayDirections.Load(C).xyz;
+		uint2 C = uint2(r, relativeProbeID);
+		float3 rayDirection    = Load(rayDirections, C, surfelsTextureSize).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = rayHitRadiance.Load(C).xyz * 1.0; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz * .85; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
-		float3  rayHitLocation  = rayHitLocations.Load(C).xyz;
+		float3  rayHitLocation  = Load(rayHitLocations, C, surfelsTextureSize).xyz;
 
-        float3 probeLocation = rayOrigins.Load(C).xyz;
+        float3 probeLocation = Load(rayOrigins, C, surfelsTextureSize).xyz;
         // Will be zero on a miss
-		float3 rayHitNormal    = rayHitNormals.Load(C).xyz;
+		float3 rayHitNormal    = Load(rayHitNormals, C, surfelsTextureSize).xyz;
 
         rayHitLocation += rayHitNormal * 0.08f;
 
@@ -114,6 +126,11 @@ void main(uint3 id : SV_DispatchThreadID)
         result.w = 1.0f - DDGIVolumes[0].hysteresis;
     } // if nonzero
 
-    float4 old = tex.Load(int3(texelPos,0));
-    tex[texelPos] = lerp(old, result, 1.0f - DDGIVolumes[0].hysteresis);
+    float4 old = Load(outputBuffer, texelPos, outputBufferSize);
+    float4 val = lerp(old, result, 1.0f - DDGIVolumes[0].hysteresis);
+    Write(outputBuffer, texelPos, outputBufferSize, val);
+
+    #ifdef DEBUG_MODE
+    debugTex[texelPos] = val;
+    #endif
 }

@@ -48,7 +48,7 @@ public class DDGIControllerEditor : Editor
 
         if (GUILayout.Button("Reset Buffers"))
         {
-            ddgiController.ResetBuffers();
+            //ddgiController.ResetBuffers();
         }
     }
 }

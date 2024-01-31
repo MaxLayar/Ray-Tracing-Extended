@@ -9,6 +9,12 @@
 #define M_PI 3.1415926535897932384626433832795
 #define NUM_DDGIVOLUMES 1
 
+//DEBUG
+#define SHOW_CHEBYSHEV_WEIGHTS 1
+#define DEBUG_VISUALIZATION_MODE 1
+#define FIRST_FRAME false
+
+
 int OFFSET_BITS_PER_CHANNEL;
 float highestSignedValue;
 
@@ -241,8 +247,8 @@ float2 probeTextureCoordFromDirection
 float4 sampleOneDDGIVolume
    (DDGIVolume             ddgiVolume,
     float3                 wsPosition,
-    float3                offsetPos,
-    float3                sampleDirection,
+    float3                 offsetPos,
+    float3                 sampleDirection,
 	float3				   cameraPos,
     // Set to false in production 
     const bool             debugDisableBackface,
@@ -426,13 +432,13 @@ float4 sampleOneDDGIVolume
             probeIrradiance = square(probeIrradiance);
         }
 
-#       if DEBUG_VISUALIZATION_MODE == DebugVisualizationMode_IRRADIANCE_PROBE_CONTRIBUTIONS
+#       if DEBUG_VISUALIZATION_MODE == 1
         {
             int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
 			probeIrradiance = (p == debugProbeIndex) ? float3(1,1,1) : float3(0,0,0);
         }
 #       endif
-#       if SHOW_CHEBYSHEV_WEIGHTS
+#       if SHOW_CHEBYSHEV_WEIGHTS == 1
 		{
 			int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
 			probeIrradiance = (p == debugProbeIndex) ? float3(1,1,1) : float3(0,0,0);
@@ -444,7 +450,7 @@ float4 sampleOneDDGIVolume
 
     // Normalize by the sum of the weights
     irradiance.xyz *= 1.0 / irradiance.a;
-
+    return irradiance;
     // Go back to linear irradiance
     if (! debugDisableNonlinear) {   
         irradiance.xyz = square(irradiance.xyz);
@@ -458,7 +464,7 @@ float4 sampleOneDDGIVolume
 
 #if NUM_DDGIVOLUMES > 0
 float3 sampleIrradiance
-   (DDGIVolume             ddgiVolumeArray[NUM_DDGIVOLUMES],
+   (StructuredBuffer<DDGIVolume>             ddgiVolumeArray,
     float3                 wsPosition,
     float3                offsetPos,
     float3                sampleDirection,
@@ -489,7 +495,7 @@ float3 sampleIrradiance
         irradiance.rgb *= irradiance.a;
         sum += irradiance;
     }
-
+    
     // Normalize
     return sum.rgb / max(0.001, sum.a);
 }

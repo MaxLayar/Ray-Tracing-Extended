@@ -34,11 +34,28 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float4 color = info.material.colour;
-        float4 irradiance = float4(sampleIrradiance(DDGIVolumes[0], info.hitPoint, float3(0,0,0), info.normal, ray.direction, false, false, -1), 0); //SampleIrradianceField(info.hitPoint - ray.direction * 0.05, info.normal, 1.0, ray.direction), 0);
-        Result[id.xy] = 
+        float4 irradiance = float4(sampleIrradiance(DDGIVolumes,
+                info.hitPoint,       //wsPosition
+                info.normal * 0.2,   //offsetPos
+                info.normal,         //sampleDirection
+                _WorldSpaceCameraPos,//cameraPos
+                true, true, -1), 1);
+        Result[id.xy] = //float4(ray.direction ,1);
             //color +
             irradiance;
     }
     else
-        Result[id.xy] = float4(0,0,1,1);
+        Result[id.xy] = float4(0,0,.1,1);
 }
+
+// sampleIrradiance(ddgiVolumeArray,
+//         surfel.position,
+//         surfel.shadingNormal * 0.2 + w_o * 0.8,
+//         surfel.shadingNormal,
+//         cameraPos)
+
+// sampleIrradiance(ddgiVolumeArray,
+//         surfel.position,
+//         surfel.glossyShadingNormal + w_o * 1.5,
+//         w_mi,
+//         cameraPos);

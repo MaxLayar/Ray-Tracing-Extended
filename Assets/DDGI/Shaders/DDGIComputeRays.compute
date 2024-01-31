@@ -1,20 +1,28 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel main
+#pragma multi_compile_local __ DEBUG_MODE
+
+
+#include <UnityPBSLighting.cginc>
+#include <UnityStandardBRDF.cginc>
 
 #include "RayTraceUtilities.cginc"
 #include "RandomUtilities.cginc"
 #include "SampleIrradianceField.cginc"
 
-#include <UnityPBSLighting.cginc>
-#include <UnityStandardBRDF.cginc>
+uint2 surfelSize;
 
 StructuredBuffer<float3> ProbesPositions;
 
-RWTexture2D<float4> rayDirections;
-RWTexture2D<float4> rayHitLocations;
-RWTexture2D<float4> rayHitRadiance;
-RWTexture2D<float4> rayHitNormals;
-RWTexture2D<float4> rayOrigins;
+RWStructuredBuffer<float4> rayDirections;
+RWStructuredBuffer<float4> rayHitLocations;
+RWStructuredBuffer<float4> rayHitRadiance;
+RWStructuredBuffer<float4> rayHitNormals;
+RWStructuredBuffer<float4> rayOrigins;
+
+#ifdef DEBUG_MODE
+RWTexture2D<float4> debugTex;
+#endif
 
 float4x4 randomOrientation;
 float4 sunColor;
@@ -71,9 +79,9 @@ void main(uint3 id : SV_DispatchThreadID)
 {   
     uint2 texelPos = uint2(id.x, id.y);
 
-    uint2 dim;
-    rayDirections.GetDimensions(dim.x, dim.y);    
-    if(texelPos.x >= dim.x || texelPos.y >= dim.y) return;
+    // uint2 dim;
+    // rayDirections.GetDimensions(dim.x, dim.y);    
+    // if(texelPos.x >= dim.x || texelPos.y >= dim.y) return;
 
     Ray ray;
     ray.direction = normalize(float3(mul(sphericalFibonacci((float) texelPos.x, (float) NumRaysPerProbe), (float3x3) randomOrientation))); //rayId = texelPos.x
@@ -86,7 +94,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
-        float4 indirectL = float4(sampleIrradiance(DDGIVolumes[0], info.hitPoint, float3(0,0,0), info.normal, viewVec, false, false, -1), 1);
+        float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, viewVec * .05, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
             //sampleIrradiance(DDGIVolumes[0], info.hitPoint, info.normal, DDGIVolumes[0].energyConservation, viewVec), 1);
         
         HitInfo shadowHit;
@@ -111,9 +119,13 @@ void main(uint3 id : SV_DispatchThreadID)
         allLight *= float4(Shade(s, viewVec), s.Alpha); 
     }
     
-    rayDirections[texelPos] = float4(ray.direction, info.dst);
-    rayHitLocations[texelPos] = float4(info.hitPoint, info.dst) * info.didHit;
-    rayHitRadiance[texelPos] = allLight;
-    rayHitNormals[texelPos] = float4(info.normal,0) * info.didHit;
-    rayOrigins[texelPos] = float4(ray.origin, info.dst);
+    Write(rayDirections, texelPos, surfelSize, float4(ray.direction, info.dst));
+    Write(rayHitLocations, texelPos, surfelSize, float4(info.hitPoint, info.dst) * info.didHit);
+    Write(rayHitRadiance, texelPos, surfelSize, allLight);
+    Write(rayHitNormals, texelPos, surfelSize, float4(info.normal,0) * info.didHit);
+    Write(rayOrigins, texelPos, surfelSize, float4(ray.origin, info.dst));
+
+    #ifdef DEBUG_MODE
+    debugTex[texelPos] = allLight;
+    #endif
 }
