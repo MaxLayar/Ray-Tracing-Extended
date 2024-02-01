@@ -10,9 +10,9 @@
 #define NUM_DDGIVOLUMES 1
 
 //DEBUG
-#define SHOW_CHEBYSHEV_WEIGHTS 1
-#define DEBUG_VISUALIZATION_MODE 1
-#define FIRST_FRAME false
+#define SHOW_CHEBYSHEV_WEIGHTS 0
+#define DEBUG_VISUALIZATION_MODE 0
+#define FIRST_FRAME 0
 
 
 int OFFSET_BITS_PER_CHANNEL;
@@ -32,7 +32,7 @@ int3 baseGridCoord(in DDGIVolume ddgiVolume, float3 X) {
    int3 unOffsetGridCoord = clamp(int3((X - ddgiVolume.probeGridOrigin) * ddgiVolume.invProbeSpacing),
                 int3(0, 0, 0), 
                 ddgiVolume.probeCounts - 1);
-   return int3(modf((unOffsetGridCoord - ddgiVolume.phaseOffsets) , ddgiVolume.probeCounts));
+   return int3(fmod((unOffsetGridCoord - ddgiVolume.phaseOffsets) , ddgiVolume.probeCounts));
 }
 
 
@@ -124,7 +124,7 @@ void writeProbeOffset(in DDGIVolume ddgiVolume, in int2 texelCoord, in float4 of
 // Apply the per-axis phase offset to derive the correct location for each probe.
 float3 gridCoordToPositionNoOffset(in DDGIVolume ddgiVolume, int3 c) {
     // Phase offset may be negative, which is fine for modular arithmetic.
-    int3 phaseOffsetGridCoord = int3(modf(c + ddgiVolume.phaseOffsets, ddgiVolume.probeCounts));
+    int3 phaseOffsetGridCoord = int3(fmod(c + ddgiVolume.phaseOffsets, ddgiVolume.probeCounts));
     return ddgiVolume.probeSpacing * float3(phaseOffsetGridCoord) + ddgiVolume.probeGridOrigin;
 }
 
@@ -133,10 +133,10 @@ float3 gridCoordToPosition(in DDGIVolume ddgiVolume, int3 c) {
     //Add per-probe offset
     uint idx = gridCoordToProbeIndex(ddgiVolume, c);
     float probeXY = ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y;
-    int2 C = probeXY != 0 ? int2(modf(idx, probeXY), idx / probeXY) : int2(0, 0);
+    int2 C = probeXY != 0 ? int2(fmod(idx, probeXY), idx / probeXY) : int2(0, 0);
 
     float3 offset =
-#if FIRST_FRAME
+#if FIRST_FRAME == 1
         int3(0);
 #else
         readProbeOffset(ddgiVolume, C).xyz; // readProbeOffset multiplies by probe step.
@@ -227,7 +227,7 @@ float2 probeTextureCoordFromDirection
 
     float2 signedOct = octEncode(dir);
     float2 unsignedOct = (signedOct + 1.0f) * 0.5f;
-    float2 octCoordNormalizedToTextureDimensions = (unsignedOct * (float)probeSideLength) * invTextureSize;
+    float2 octCoordNormalizedToTextureDimensions = (unsignedOct * float(probeSideLength)) * invTextureSize;
     
     int probeWithBorderSide = probeSideLength + 2;
 
@@ -333,7 +333,7 @@ float4 sampleOneDDGIVolume
 
 		// Because of the phase offset applied for camera locked volumes,
 		// we need to add the computed offset modulo the probecounts.
-        int3 probeGridCoord = int3(modf((anchorGridCoord + offset), ddgiVolume.probeCounts));
+        int3 probeGridCoord = int3(fmod((anchorGridCoord + offset), ddgiVolume.probeCounts));
 
         // Make cosine falloff in tangent plane with respect to the angle from the surface to the probe so that we never
         // test a probe that is *behind* the surface.
@@ -486,7 +486,7 @@ float3 sampleIrradiance
         float4 irradiance = sampleOneDDGIVolume(ddgiVolumeArray[v], wsPosition, offsetPos, sampleDirection, cameraPos, debugDisableBackface, debugDisableChebyshev, debugProbeIndex, skippable);
 
         // Visualize weights per volume:
-		//irradiance.rgb = float3(0); irradiance[v] = irradiance.a;// 1.0;
+		//irradiance.rgb = float3(0,0,0); irradiance[v] = irradiance.a;// 1.0;
 
         // Max contribution of other probes should be limited by how much more weight is required
         irradiance.a *= saturate(1.0 - sum.a);

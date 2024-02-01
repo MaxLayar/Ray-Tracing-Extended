@@ -93,7 +93,7 @@ void main(uint3 id : SV_DispatchThreadID)
     float4 allLight = float4(0,0,0,0);
     if (TraceRay(ray, info))
     {
-        float3 viewVec = normalize(ray.origin.xyz - info.hitPoint);
+        float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
         float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, viewVec * .05, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
             //sampleIrradiance(DDGIVolumes[0], info.hitPoint, info.normal, DDGIVolumes[0].energyConservation, viewVec), 1);
         

@@ -30,7 +30,7 @@ int PROBE_SIDE_LENGTH;
 
 int probeID(float2 texelXY, uint width) {
     int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
-    int probesPerSide = (width - 2) / probeWithBorderSide;
+    int probesPerSide = width / probeWithBorderSide;
     return int(texelXY.x / probeWithBorderSide) + probesPerSide * int(texelXY.y / probeWithBorderSide);
 }
 

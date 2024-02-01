@@ -25,8 +25,8 @@ public class DDGIController : MonoBehaviour
 		public Vector3          	   probeSpacing;
 		public Vector3          	   invProbeSpacing; // 1 / probeSpacing
 		public Vector3Int              phaseOffsets;
-		public Vector2Int              invIrradianceTextureSize;
-		public Vector2Int              invVisibilityTextureSize;
+		public Vector2                 invIrradianceTextureSize;
+		public Vector2                 invVisibilityTextureSize;
 		// probeOffsetLimit on [0,0.5] where max probe 
 		// offset = probeOffsetLimit * probeSpacing
 		// Usually 0.4, controllable from GUI.
@@ -117,8 +117,6 @@ public class DDGIController : MonoBehaviour
 
 		if (ddgiVolumes.Count == 0)
 			ddgiVolumes.Add(new DDGIVolume());
-
-		NotifyOfCameraPosition(Camera.current ? Camera.current.transform.position : Camera.main.transform.position);
 	}
 
 	void Update()
@@ -188,10 +186,10 @@ public class DDGIController : MonoBehaviour
 
 	(int,int) GetBufferDimensions(int probeSideLength, Vector3Int probeCounts)
 	{
-		int irrW = (probeSideLength + 2) /* 1px Border around probe left and right */ * probeCounts.x * probeCounts.y + 2; /* 1px Border around whole texture left and right*/
-		int irrH = (probeSideLength + 2) * probeCounts.z + 2;
+		int sizeW = (probeSideLength + 2) /* 1px Border around probe left and right */ * probeCounts.x * probeCounts.y;// + 2; /* 1px Border around whole texture left and right*/
+		int sizeH = (probeSideLength + 2) * probeCounts.z;// + 2;
 
-		return (irrW, irrH);
+		return (sizeW, sizeH);
 	}
 
 
@@ -405,10 +403,10 @@ public class DDGIController : MonoBehaviour
 
 		DDGIVolume copy = ddgiVolumes[0];
 		(int irrW, int irrH) = GetBufferDimensions(copy.irradianceProbeSideLength, copy.probeCounts);
-		copy.invIrradianceTextureSize = DivideVectors(Vector2Int.one, new Vector2Int(irrW, irrH));
+		copy.invIrradianceTextureSize = DivideVectors(Vector2.one, new Vector2(irrW, irrH));
 
 		(int visW, int visH) = GetBufferDimensions(copy.visibilityProbeSideLength, copy.probeCounts);
-		copy.invVisibilityTextureSize = DivideVectors(Vector2Int.one, new Vector2Int(visW, visH));
+		copy.invVisibilityTextureSize = DivideVectors(Vector2.one, new Vector2(visW, visH));
 
 		copy.invIrradianceGamma = 1.0f / copy.irradianceGamma; 
 
@@ -611,7 +609,8 @@ public class DDGIController : MonoBehaviour
 
 	void Start()
 	{
-		numRenderedFrames = 0;
+		numRenderedFrames = 0;		
+		NotifyOfCameraPosition(Camera.current ? Camera.current.transform.position : Camera.main.transform.position);
 	}
 
     void OnRenderImage(RenderTexture src, RenderTexture target)
@@ -677,9 +676,8 @@ public class DDGIController : MonoBehaviour
 			CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
 			raytracedDDGIShader.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
-			DDGIVolume copy = ddgiVolumes[0];
-			(int irrW, int irrH) = GetBufferDimensions(copy.irradianceProbeSideLength, copy.probeCounts);
-			(int visW, int visH) = GetBufferDimensions(copy.visibilityProbeSideLength, copy.probeCounts);
+			(int irrW, int irrH) = GetBufferDimensions(ddgiVolumes[0].irradianceProbeSideLength, ddgiVolumes[0].probeCounts);
+			(int visW, int visH) = GetBufferDimensions(ddgiVolumes[0].visibilityProbeSideLength, ddgiVolumes[0].probeCounts);
 
 			PrepareDDGIVolumeBuffers(raytracedDDGIShader, irrW, irrH, visW, visH);
 

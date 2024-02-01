@@ -116,12 +116,8 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
                 float3 viewDir = normalize(UnityWorldSpaceViewDir(wpos));
                 
                 float3 color = tex2D(_MainTex, input.texcoord);
-                float3 irradiance = sampleIrradiance(DDGIVolumes, wpos, wNormal * 0.2 + viewDir * 0.8, wNormal, _WorldSpaceCameraPos, false, false, -1);
-                //SampleIrradianceField(wpos, wNormal, 1.0, _WorldSpaceCameraPos); //viewDir);
-                return float4(
-                    color + 
-                    irradiance
-                    , 0);
+                float3 irradiance = abs(sampleIrradiance(DDGIVolumes, wpos, wNormal * 0.2 + viewDir * 0.8, wNormal, _WorldSpaceCameraPos, false, false, -1));
+                return float4(color + irradiance, 1);
             }
 
             ENDHLSL

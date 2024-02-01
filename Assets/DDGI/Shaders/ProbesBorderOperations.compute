@@ -17,10 +17,18 @@ RWTexture2D<float4> debugTex;
 
 bool isAtProbeBorder(uint2 pos, out bool isAtProbeX, out bool isAtProbeY)
 {
-    int gap = PROBE_SIDE_LENGTH;
+    int gap = PROBE_SIDE_LENGTH + 2;
     isAtProbeX = (pos.x % gap == 0) || ((pos.x % gap) == gap - 1);
     isAtProbeY = (pos.y % gap == 0) || ((pos.y % gap) == gap - 1);
     return isAtProbeX || isAtProbeY;
+
+    // // Calculate the pixel position in the probe space
+    // int2 probeSpaceCoord = int2(fmod(pos, PROBE_SIDE_LENGTH + 2));
+    // isAtProbeX = (probeSpaceCoord.x < 2);
+    // isAtProbeY = (probeSpaceCoord.y < 2);
+    
+    // // Check if any component is less than 2
+    // return isAtProbeX || isAtProbeY;
 }
 
 
@@ -70,9 +78,6 @@ void mainWriteOnesToBorder(uint3 id : SV_DispatchThreadID)
 {   
     uint2 texelPos = uint2(id.x, id.y);
 
-    // uint2 dim; 
-    // tex.GetDimensions(dim.x,dim.y);
-
     if(texelPos.x > probesBufferSize.x || texelPos.y > probesBufferSize.y)
          return;
 
@@ -90,10 +95,8 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
 {   
     uint2 texelPos = uint2(id.x, id.y);
 
-    // uint2 dim;
-    // tex.GetDimensions(dim.x,dim.y);
-    // if(texelPos.x >= dim.x || texelPos.y >= dim.y)
-    //     return;
+    if(texelPos.x > probesBufferSize.x || texelPos.y > probesBufferSize.y)
+         return;
 
     bool isAtBorderX, isAtBorderY;
 
@@ -101,7 +104,7 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
     {
         if(isAtBorderX && isAtBorderY)
         {
-            int2 offsetPos = int2(texelPos.x /*minus border around tex */ + PROBE_SIDE_LENGTH * leftOrRight(texelPos.x),
+            int2 offsetPos = int2(texelPos.x + PROBE_SIDE_LENGTH * leftOrRight(texelPos.x),
                 texelPos.y + PROBE_SIDE_LENGTH * leftOrRight(texelPos.y));
             float4 texelToCopy = Load(probesBuffer, offsetPos, probesBufferSize);
 
@@ -109,7 +112,6 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
             #ifdef DEBUG_MODE
             debugTex[texelPos] = texelToCopy;
             #endif
-            //tex[texelPos] = float4(offsetPos,1);
             return;
         }
 
@@ -122,7 +124,6 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
             #ifdef DEBUG_MODE
             debugTex[texelPos] = texelToCopy;
             #endif
-            //tex[texelPos] = float4(pos,0.4,0.4,0);
             return;
         }
 
@@ -135,13 +136,12 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
             #ifdef DEBUG_MODE
             debugTex[texelPos] = texelToCopy;
             #endif
-            //tex[texelPos] = float4(pos,0.4,0.4,0);
             return;
         }
-        #ifdef DEBUG_MODE
-        debugTex[texelPos] = float4(0,1,0,1);
-        #endif
     }
+    #ifdef DEBUG_MODE
+    debugTex[texelPos] = Load(probesBuffer, texelPos, probesBufferSize);
+    #endif
 }
 
 

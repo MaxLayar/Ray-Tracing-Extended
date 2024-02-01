@@ -33,15 +33,16 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     HitInfo info;
     if (TraceRay(ray, info))
     {
-        float4 color = info.material.colour;
+        float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
+
         float4 irradiance = float4(sampleIrradiance(DDGIVolumes,
-                info.hitPoint,       //wsPosition
-                info.normal * 0.2,   //offsetPos
-                info.normal,         //sampleDirection
-                _WorldSpaceCameraPos,//cameraPos
-                true, true, -1), 1);
+                info.hitPoint,                       //wsPosition
+                info.normal * 0.2 + viewVec * 0.8,   //offsetPos
+                info.normal,                         //sampleDirection
+                _WorldSpaceCameraPos,                //cameraPos
+                false, false, -1), 1);
         Result[id.xy] = //float4(ray.direction ,1);
-            //color +
+            info.material.colour +
             irradiance;
     }
     else
@@ -53,9 +54,3 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 //         surfel.shadingNormal * 0.2 + w_o * 0.8,
 //         surfel.shadingNormal,
 //         cameraPos)
-
-// sampleIrradiance(ddgiVolumeArray,
-//         surfel.position,
-//         surfel.glossyShadingNormal + w_o * 1.5,
-//         w_mi,
-//         cameraPos);
