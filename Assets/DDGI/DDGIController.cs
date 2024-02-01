@@ -101,6 +101,12 @@ public class DDGIController : MonoBehaviour
 		Update,
 		Finalize,
 	}
+	public DebugOutputMode outputMode = DebugOutputMode.Irradiance;
+	public enum DebugOutputMode
+	{
+		Irradiance,
+		Visibility,
+	}
 
 	[Header("DANGEROUS")]
 	public bool showHitPoints = false;
@@ -140,8 +146,8 @@ public class DDGIController : MonoBehaviour
 					probeOffsetsTexture = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
 					probeOffsetsImage = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
 
-					UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 0); //set ones
-					UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 0); //set ones
+					UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 0, DebugOutputMode.Visibility); //set ones
+					UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 0, DebugOutputMode.Irradiance); //set ones
 				}
 				isWriteOnesDone = true;
 			}
@@ -153,13 +159,13 @@ public class DDGIController : MonoBehaviour
 
 			foreach(DDGIVolume ddgiVolume in ddgiVolumes)
 			{
-				UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 1); //copy borders
-				UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 1); //copy borders
+				UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 1, DebugOutputMode.Visibility); //copy borders
+				UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 1, DebugOutputMode.Irradiance); //copy borders
 			}
 		}
 	}
 
-	void UpdateProbesBorders(ComputeBuffer probesBuffer, int probeSideLength, Vector3Int probeCounts, int kernelIndex)
+	void UpdateProbesBorders(ComputeBuffer probesBuffer, int probeSideLength, Vector3Int probeCounts, int kernelIndex, DebugOutputMode debugOutputMode)
 	{
 		(int threadGroupsX, int threadGroupsY) = GetBufferDimensions(probeSideLength, probeCounts);
 
@@ -170,7 +176,8 @@ public class DDGIController : MonoBehaviour
 		CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
 		computeBorders.SetBuffer(kernelIndex, "DDGIVolumes", ddgiVolumesBuffer); //useless?
 
-		if(debugTexture && 
+		if(debugTexture &&
+		outputMode == debugOutputMode &&
 		((debugTextureAtPass is DDGIPass.Borders && kernelIndex == 0) ||
 		(debugTextureAtPass is DDGIPass.Finalize && kernelIndex == 1)))
 		{
@@ -408,11 +415,11 @@ public class DDGIController : MonoBehaviour
 		(int visW, int visH) = GetBufferDimensions(copy.visibilityProbeSideLength, copy.probeCounts);
 		copy.invVisibilityTextureSize = DivideVectors(Vector2.one, new Vector2(visW, visH));
 
-		copy.invIrradianceGamma = 1.0f / copy.irradianceGamma; 
+		copy.invIrradianceGamma = 1.0f / copy.irradianceGamma;
 
 		Vector3 probeEnd = copy.probeGridOrigin + MultiplyVectors(copy.probeCounts - Vector3Int.one, copy.probeSpacing);
 		Vector3 probeSpan = probeEnd - copy.probeGridOrigin;
-		copy.maxDistance = Vector3.Magnitude(DivideVectors(probeSpan, copy.probeCounts)) * 1.5f;
+		copy.maxDistance = Vector3.Magnitude(DivideVectors(probeSpan, copy.probeCounts)) * 1.25f;
 		ddgiVolumes[0] = copy;
 
 		numRaysPerPixel = Mathf.Max(1, numRaysPerPixel);

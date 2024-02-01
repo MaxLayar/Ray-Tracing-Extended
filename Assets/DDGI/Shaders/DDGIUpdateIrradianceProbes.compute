@@ -40,7 +40,7 @@ float2 normalizedOctCoord(uint2 fragCoord) {
 
     float2 octFragCoord = int2((fragCoord.x - 2) % probeWithBorderSide, (fragCoord.y - 2) % probeWithBorderSide);
     // Add back the half pixel to get pixel center normalized coordinates
-    return (float2(octFragCoord) + float2(0.5f,0.5f))*(2.0f / float(PROBE_SIDE_LENGTH)) - float2(1.0f, 1.0f);
+    return (octFragCoord + float2(0.5f,0.5f))*(2.0f / float(PROBE_SIDE_LENGTH)) - float2(1.0f, 1.0f);
 }
 
 
@@ -60,7 +60,6 @@ void main(uint3 id : SV_DispatchThreadID)
     PROBE_SIDE_LENGTH = DDGIVolumes[0].visibilityProbeSideLength;
 #endif
     
-    float epsilon = 1e-6;
     uint2 texelPos = uint2(id.x, id.y);
 
     float4 result = float4(0,0,0,0);
@@ -91,43 +90,48 @@ void main(uint3 id : SV_DispatchThreadID)
         // Will be zero on a miss
 		float3 rayHitNormal    = Load(rayHitNormals, C, surfelsTextureSize).xyz;
 
-        rayHitLocation += rayHitNormal * 0.08f;
+        rayHitLocation += DDGIVolumes[0].phaseOffsets; //rayHitNormal * 0.08f;
 
 		float rayProbeDistance = min(DDGIVolumes[0].maxDistance, length(probeLocation - rayHitLocation));
         
         // Detect misses and force depth
-		if (dot(rayHitNormal, rayHitNormal) < epsilon) {
+        if (dot(rayHitNormal, rayHitNormal) < 1e-6)
+        {
             rayProbeDistance = DDGIVolumes[0].maxDistance;
         }
 #endif
 
 
 #ifdef OUTPUT_IRRADIANCE
-        float weight = max(0.0, dot(texelDirection, rayDirection));
+        float weight = max(0.0, dot(rayDirection, texelDirection));
 #else
         float weight = pow(max(0.0, dot(texelDirection, rayDirection)), DDGIVolumes[0].depthSharpness);
 #endif
-        if (weight >= epsilon) {
+        //if (weight >= epsilon) {
             // Storing the sum of the weights in alpha temporarily
 #ifdef OUTPUT_IRRADIANCE
             result += float4(rayHitRadiance_ * weight, weight);
 #else
-            result += float4(rayProbeDistance * weight,
-                square(rayProbeDistance) * weight,
+            result += float4(abs(rayProbeDistance) * weight,
+                square(abs(rayProbeDistance)) * weight,
                 0.0,
                 weight);
 #endif
-        }
+        //}
 		
 	}
-
-    if (result.w > epsilon) {
-        result.xyz /= result.w;
-        result.w = 1.0f - DDGIVolumes[0].hysteresis;
-    } // if nonzero
+    
+    float epsilon = 1e-9 * float(RAYS_PER_PROBE);
+//    if (result.w > epsilon) {
+    result.xyz *= 1.0 / max(result.w, epsilon);
+        //result.w = 1.0f - DDGIVolumes[0].hysteresis;
+//    } // if nonzero
 
     float4 old = Load(outputBuffer, texelPos, outputBufferSize);
-    float4 val = lerp(old, result, 1.0f - DDGIVolumes[0].hysteresis);
+#ifdef OUTPUT_IRRADIANCE
+    result.xyz = pow(abs(result.xyz), float3(1,1,1) * DDGIVolumes[0].invIrradianceGamma);
+#endif
+    float4 val = lerp(result, old, DDGIVolumes[0].hysteresis);
     Write(outputBuffer, texelPos, outputBufferSize, val);
 
     #ifdef DEBUG_MODE

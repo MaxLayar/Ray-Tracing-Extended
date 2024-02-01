@@ -450,7 +450,7 @@ float4 sampleOneDDGIVolume
 
     // Normalize by the sum of the weights
     irradiance.xyz *= 1.0 / irradiance.a;
-    return irradiance;
+
     // Go back to linear irradiance
     if (! debugDisableNonlinear) {   
         irradiance.xyz = square(irradiance.xyz);
