@@ -90,7 +90,7 @@ void main(uint3 id : SV_DispatchThreadID)
         // Will be zero on a miss
 		float3 rayHitNormal    = Load(rayHitNormals, C, surfelsTextureSize).xyz;
 
-        rayHitLocation += DDGIVolumes[0].phaseOffsets; //rayHitNormal * 0.08f;
+        rayHitLocation += rayHitNormal * 0.08f;
 
 		float rayProbeDistance = min(DDGIVolumes[0].maxDistance, length(probeLocation - rayHitLocation));
         
@@ -122,15 +122,15 @@ void main(uint3 id : SV_DispatchThreadID)
 	}
     
     float epsilon = 1e-9 * float(RAYS_PER_PROBE);
-//    if (result.w > epsilon) {
     result.xyz *= 1.0 / max(result.w, epsilon);
-        //result.w = 1.0f - DDGIVolumes[0].hysteresis;
-//    } // if nonzero
+    //result.w = 1.0f - DDGIVolumes[0].hysteresis;
 
     float4 old = Load(outputBuffer, texelPos, outputBufferSize);
+    
 #ifdef OUTPUT_IRRADIANCE
     result.xyz = pow(abs(result.xyz), float3(1,1,1) * DDGIVolumes[0].invIrradianceGamma);
 #endif
+
     float4 val = lerp(result, old, DDGIVolumes[0].hysteresis);
     Write(outputBuffer, texelPos, outputBufferSize, val);
 

@@ -42,8 +42,8 @@ void CSMain (uint3 id : SV_DispatchThreadID)
                 _WorldSpaceCameraPos,                //cameraPos
                 false, false, -1), 1);
         Result[id.xy] = //float4(ray.direction ,1);
-            info.material.colour +
-            irradiance;
+            info.material.colour * 0.2 +
+            irradiance * 0.8;
     }
     else
         Result[id.xy] = float4(0,0,.1,1);

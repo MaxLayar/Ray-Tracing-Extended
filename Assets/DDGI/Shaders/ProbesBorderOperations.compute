@@ -17,7 +17,7 @@ RWTexture2D<float4> debugTex;
 
 bool isAtProbeBorder(uint2 pos, out bool isAtProbeX, out bool isAtProbeY)
 {
-    int gap = PROBE_SIDE_LENGTH + 2;
+    uint gap = PROBE_SIDE_LENGTH + 2;
     isAtProbeX = (pos.x % gap == 0) || ((pos.x % gap) == gap - 1);
     isAtProbeY = (pos.y % gap == 0) || ((pos.y % gap) == gap - 1);
     return isAtProbeX || isAtProbeY;
@@ -61,14 +61,14 @@ int leftOrRight(int pos)
     return posInProbe < middle ? 1 : -1;
 }
 
-int mirrored(int pos)
+uint mirrored(int pos)
 {
     pos = pos - 1;
-    int probeWithBorderSize = 2 + PROBE_SIDE_LENGTH;
-    int posInProbe = int(pos) % probeWithBorderSize;
-    int probe = int(pos) / probeWithBorderSize;
-    int probeStart = (probe * probeWithBorderSize) + 1;
-    int middle = probeWithBorderSize / 2;
+    uint probeWithBorderSize = 2 + PROBE_SIDE_LENGTH;
+    uint posInProbe = pos % probeWithBorderSize;
+    uint probe = uint(pos / probeWithBorderSize);
+    uint probeStart = (probe * probeWithBorderSize) + 1;
+    uint middle = probeWithBorderSize / 2;
     int dstToMiddle = middle - posInProbe;
     return probeStart + middle + dstToMiddle - 1;
 }

@@ -78,19 +78,18 @@ int findMSB(int x)
 
 int3 probeIndexToGridCoord(in DDGIVolume ddgiVolume, int index) {    
     /* Works for any # of probes */
-    /*
+    int3 iPos;
     iPos.x = index % ddgiVolume.probeCounts.x;
     iPos.y = (index % (ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y)) / ddgiVolume.probeCounts.x;
     iPos.z = index / (ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
-    */
 
-    // Assumes probeCounts are powers of two.
-    // Saves ~10ms compared to the divisions above
-    // Precomputing the MSB actually slows this code down substantially
-    int3 iPos;
-    iPos.x = index & (ddgiVolume.probeCounts.x - 1);
-    iPos.y = (index & ((ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y) - 1)) >> findMSB(ddgiVolume.probeCounts.x);
-    iPos.z = index >> findMSB(ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
+    //// Assumes probeCounts are powers of two.
+    //// Saves ~10ms compared to the divisions above
+    //// Precomputing the MSB actually slows this code down substantially
+    //int3 iPos;
+    //iPos.x = index & (ddgiVolume.probeCounts.x - 1);
+    //iPos.y = (index & ((ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y) - 1)) >> findMSB(ddgiVolume.probeCounts.x);
+    //iPos.z = index >> findMSB(ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
 
     return iPos;
 }
@@ -148,37 +147,6 @@ float3 probeLocation(in DDGIVolume ddgiVolume, int index) {
     return gridCoordToPosition(ddgiVolume, probeIndexToGridCoord(ddgiVolume, index));
 }
 
-
-/** GLSL's dot on ivec3 returns a float. This is an all-integer version */
-int idot(int3 a, int3 b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-float square(float f)
-{
-    return f * f;
-}
-
-float3 square(float3 f)
-{
-    return float3(f.x * f.x, f.y * f.y, f.z * f.z);
-}
-
-float pow3(float f)
-{
-    return f * f * f;
-}
-
-float pow(float a, float b)
-{
-    return exp(a * log(b));
-}
-
-float3 pow(float3 f, float3 x)
-{
-    return float3(pow(f.x, x.x), pow(f.y, x.y), pow(f.z, x.z));
-}
-
 /**
    \param baseProbeIndex Index into ddgiVolume.radianceProbeGrid's TEXTURE_2D_ARRAY. This is the probe
    at the floor of the current ray sampling position.
@@ -213,7 +181,7 @@ int relativeProbeIndex(in DDGIVolume ddgiVolume, int baseProbeIndex, int relativ
     //
     // (numProbes is guaranteed to be a power of 2 in the current implementation, 
     // which allows us to use a bitand instead of a modulo operation.)
-    return (baseProbeIndex + idot(offset, stride)) & (numProbes - 1);
+    return (baseProbeIndex + dot(offset, stride)) & (numProbes - 1);
 }
 
 float2 probeTextureCoordFromDirection
@@ -221,22 +189,17 @@ float2 probeTextureCoordFromDirection
     int3           probeGridCoord,
     const in bool       useIrradiance,
     DDGIVolume          ddgiVolume) {
-
-    float2 invTextureSize = useIrradiance ? ddgiVolume.invIrradianceTextureSize : ddgiVolume.invVisibilityTextureSize;
     int probeSideLength = useIrradiance ? ddgiVolume.irradianceProbeSideLength : ddgiVolume.visibilityProbeSideLength;
 
     float2 signedOct = octEncode(dir);
     float2 unsignedOct = (signedOct + 1.0f) * 0.5f;
-    float2 octCoordNormalizedToTextureDimensions = (unsignedOct * float(probeSideLength)) * invTextureSize;
-    
     int probeWithBorderSide = probeSideLength + 2;
 
-    float2 probeTopLeftPosition = float2((probeGridCoord.x + probeGridCoord.y * ddgiVolume.probeCounts.x) * probeWithBorderSide,
-        probeGridCoord.z * probeWithBorderSide) + float2(1,1);
-
-    float2 normalizedProbeTopLeftPosition = float2(probeTopLeftPosition) * invTextureSize;
-
-    return float2(normalizedProbeTopLeftPosition + octCoordNormalizedToTextureDimensions);
+    float2 coordInProbe = unsignedOct * probeSideLength + float2(1,1);
+    uint2 probeTexCoordStart = uint2((probeGridCoord.x + probeGridCoord.y * ddgiVolume.probeCounts.x) * probeWithBorderSide,
+        probeGridCoord.z * probeWithBorderSide);
+    
+    return probeTexCoordStart + (uint2) coordInProbe;
 }
 
 
@@ -323,7 +286,7 @@ float4 sampleOneDDGIVolume
         // Compute the offset grid coord and clamp to the probe grid boundary
         // Offset = 0 or 1 along each axis. Pull the offsets from the bits of the 
         // loop index: x = bit 0, y = bit 1, z = bit 2
-        int3  offset = int3(i, i >> 1, i >> 2) & int3(1,1,1);
+        int3 offset = int3(i, i >> 1, i >> 2) & int3(1,1,1);
 
         // Compute the trilinear weights based on the grid cell vertex to smoothly
         // transition between probes. Offset is binary, so we're
@@ -333,7 +296,7 @@ float4 sampleOneDDGIVolume
 
 		// Because of the phase offset applied for camera locked volumes,
 		// we need to add the computed offset modulo the probecounts.
-        int3 probeGridCoord = int3(fmod((anchorGridCoord + offset), ddgiVolume.probeCounts));
+        int3 probeGridCoord = int3(fmod(anchorGridCoord + offset, ddgiVolume.probeCounts));
 
         // Make cosine falloff in tangent plane with respect to the angle from the surface to the probe so that we never
         // test a probe that is *behind* the surface.
@@ -361,7 +324,7 @@ float4 sampleOneDDGIVolume
             // The small offset at the end reduces the "going to zero" impact
             // where this is really close to exactly opposite
 #if SHOW_CHEBYSHEV_WEIGHTS == 0
-            weight *= square((dot(trueDirectionToProbe, sampleDirection) + 1.0) * 0.5) + 0.2;
+            weight *= sqrt((dot(trueDirectionToProbe, sampleDirection) + 1.0) * 0.5) + 0.2;
 #endif
         }
         
@@ -372,7 +335,7 @@ float4 sampleOneDDGIVolume
         // the other side (this can only happen if there are MULTIPLE occluders near each other, a wall surface
         // won't pass through itself.)
         float3 probeToBiasedPointDirection = (wsPosition + offsetPos) - probePos;
-        float distanceToBiasedPoint = length(probeToBiasedPointDirection);
+        float distanceToBiasedPoint = length(probeToBiasedPointDirection);        
         probeToBiasedPointDirection *= 1.0 / distanceToBiasedPoint;
                  
         if (! debugDisableChebyshev) {
@@ -380,7 +343,7 @@ float4 sampleOneDDGIVolume
 
             float2 temp = Load(visibilityTexture, texCoord, visibilityTextureSize).xy;
             float meanDistanceToOccluder = temp.x;
-            float variance = abs(square(temp.x) - temp.y);
+            float variance = abs(sqrt(temp.x) - temp.y);
 
             variance += ddgiVolume.debugVarianceBias;
             meanDistanceToOccluder += ddgiVolume.debugMeanBias;
@@ -391,10 +354,10 @@ float4 sampleOneDDGIVolume
 
                 // http://www.punkuser.net/vsm/vsm_paper.pdf; equation 5
                 // Need the max in the denominator because biasing can cause a negative displacement
-                chebyshevWeight = variance / (variance + square(distanceToBiasedPoint - meanDistanceToOccluder));
+                chebyshevWeight = variance / (variance + sqrt(distanceToBiasedPoint - meanDistanceToOccluder));
                 
                 // Increase contrast in the weight
-                chebyshevWeight = max(pow3(chebyshevWeight) - ddgiVolume.debugChebyshevBias, 0.0) * ddgiVolume.debugChebyshevNormalize;
+                chebyshevWeight = max(pow(chebyshevWeight,3) - ddgiVolume.debugChebyshevBias, 0.0) * ddgiVolume.debugChebyshevNormalize;
 
             }
 
@@ -415,7 +378,7 @@ float4 sampleOneDDGIVolume
             // crush tiny weights but keep the curve continuous.
             const float crushThreshold = 0.2;
             if (weight < crushThreshold) {
-                weight *= square(weight) * (1.0 / square(crushThreshold)); 
+                weight *= sqrt(weight) * (1.0 / sqrt(crushThreshold)); 
             }
         }
       
@@ -429,7 +392,7 @@ float4 sampleOneDDGIVolume
 
         if (debugDisableNonlinear) {
             // Undo the gamma encoding for debugging
-            probeIrradiance = square(probeIrradiance);
+            probeIrradiance = sqrt(probeIrradiance);
         }
 
 #       if DEBUG_VISUALIZATION_MODE == 1
@@ -453,7 +416,7 @@ float4 sampleOneDDGIVolume
 
     // Go back to linear irradiance
     if (! debugDisableNonlinear) {   
-        irradiance.xyz = square(irradiance.xyz);
+        irradiance.xyz = sqrt(irradiance.xyz);
     }
 
     // Was factored out of probes

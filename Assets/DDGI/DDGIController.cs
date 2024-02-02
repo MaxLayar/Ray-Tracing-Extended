@@ -154,8 +154,8 @@ public class DDGIController : MonoBehaviour
 
 			PrepareScene(computeRays);
 			ComputeProbesRays();
-			UpdateProbes(false); //weight
-			UpdateProbes(true); //irradiance
+			UpdateProbes(false, DebugOutputMode.Visibility);
+			UpdateProbes(true, DebugOutputMode.Irradiance);
 
 			foreach(DDGIVolume ddgiVolume in ddgiVolumes)
 			{
@@ -334,7 +334,7 @@ public class DDGIController : MonoBehaviour
 		shader.SetVector("probeOffsetsImageSize", new Vector4(visW, visH));
 	}
 
-	public void UpdateProbes(bool isOutputIrradiance)
+	public void UpdateProbes(bool isOutputIrradiance, DebugOutputMode debugOutputMode)
 	{
 		DDGIVolume copy = ddgiVolumes[0];
 		
@@ -367,7 +367,7 @@ public class DDGIController : MonoBehaviour
 		computeIrradiance.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
 		//DEBUG
-		if(debugTexture && debugTextureAtPass is DDGIPass.Update)
+		if(debugTexture && outputMode == debugOutputMode && debugTextureAtPass is DDGIPass.Update)
 		{
 			RefreshBufferIfNeeded(ref debugTexture, "Debug Update Pass", bufferSize.w, bufferSize.h);
 			computeIrradiance.SetTexture(0, "debugTex", debugTexture);
@@ -671,6 +671,8 @@ public class DDGIController : MonoBehaviour
 			blitMaterial.SetBuffer("visibilityTexture", visibilityTexture);
 			blitMaterial.SetVector("visibilityTextureSize", new Vector4(visSize.w, visSize.h));
 
+			blitMaterial.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel);
+
 			blitMaterial.SetMatrix("_InverseView", cam.cameraToWorldMatrix);
 			blitMaterial.SetMatrix("_ViewProjInv", (cam.projectionMatrix * cam.worldToCameraMatrix).inverse.transpose);
 		}
@@ -693,6 +695,7 @@ public class DDGIController : MonoBehaviour
 			float planeWidth = planeHeight * cam.aspect;
 			raytracedDDGIShader.SetVector("ViewParams", new Vector3(planeWidth, planeHeight, cam.farClipPlane));
 			raytracedDDGIShader.SetMatrix("_CameraLocalToWorld", cam.transform.localToWorldMatrix);
+			raytracedDDGIShader.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel);
 
 			SetMeshesBuffer(raytracedDDGIShader);
 			SetLightsValues(raytracedDDGIShader);

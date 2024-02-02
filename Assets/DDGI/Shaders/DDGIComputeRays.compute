@@ -94,7 +94,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
-        float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal*.02+viewVec*.08, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
+        float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal*.2+viewVec*.8, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
             //sampleIrradiance(DDGIVolumes[0], info.hitPoint, info.normal, DDGIVolumes[0].energyConservation, viewVec), 1);
         
         HitInfo shadowHit;
