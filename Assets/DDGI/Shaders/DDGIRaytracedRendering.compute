@@ -1,9 +1,11 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
+#include <UnityPBSLighting.cginc>
+
 #include "UnityCG.cginc"
-#include "RayTraceUtilities.cginc"
 #include "SampleIrradianceField.cginc"
+#include "RayTraceUtilities.cginc"
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -12,6 +14,9 @@ RWTexture2D<float4> Result;
 // Camera parameters
 float4x4 _CameraLocalToWorld;
 float3 ViewParams;
+
+float4 sunColor;
+float3 sunDirection;
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
@@ -35,15 +40,13 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
 
-        float4 irradiance = float4(sampleIrradiance(DDGIVolumes,
-                info.hitPoint,                       //wsPosition
-                info.normal * 0.2 + viewVec * 0.8,   //offsetPos
-                info.normal,                         //sampleDirection
-                _WorldSpaceCameraPos,                //cameraPos
-                false, false, -1), 1);
-        Result[id.xy] = //float4(ray.direction ,1);
-            info.material.colour * 0.2 +
-            irradiance * 0.8;
+        // float4 irradiance = float4(sampleIrradiance(DDGIVolumes,
+        //         info.hitPoint,                       //wsPosition
+        //         info.normal * 0.2 + viewVec * 0.8,   //offsetPos
+        //         -info.normal,                         //sampleDirection
+        //         _WorldSpaceCameraPos,                //cameraPos
+        //         true, false, -1), 1);
+        Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor);
     }
     else
         Result[id.xy] = float4(0,0,.1,1);

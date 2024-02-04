@@ -6946,21 +6946,21 @@ MonoBehaviour:
     probeSpacing: {x: 1.0939877, y: 1.1775675, z: 1.0610006}
     invProbeSpacing: {x: 0.91408706, y: 0.84920824, z: 0.94250655}
     phaseOffsets: {x: 0, y: 0, z: 0}
-    invIrradianceTextureSize: {x: 0.00047348486, y: 0.0028409092}
-    invVisibilityTextureSize: {x: 0.00047348486, y: 0.0028409092}
+    invIrradianceTextureSize: {x: 0.0018939395, y: 0.011363637}
+    invVisibilityTextureSize: {x: 0.0009469697, y: 0.0056818184}
     probeOffsetLimit: 0.4
-    irradianceProbeSideLength: 30
-    visibilityProbeSideLength: 30
+    irradianceProbeSideLength: 6
+    visibilityProbeSideLength: 14
     selfShadowBias: 0.05
-    irradianceGamma: 0.5
-    invIrradianceGamma: 2
-    debugMeanBias: 0
+    irradianceGamma: 1
+    invIrradianceGamma: 1
+    debugMeanBias: 0.5
     debugVarianceBias: 0
     debugChebyshevBias: 0
     debugChebyshevNormalize: 1
-    isCameraLocked: 0
+    isCameraLocked: 1
     depthSharpness: 50
-    hysteresis: 0.965
+    hysteresis: 0.899
     energyConservation: 0.85
     maxDistance: 2.1222074
   computeRays: {fileID: 7200000, guid: 3362504a94ecb4598a2e25e2898ddc1f, type: 3}
@@ -11802,13 +11802,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1574535519}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.19283877, y: -0.4576035, z: 0.85369194, w: -0.15691483}
+  m_LocalRotation: {x: -0.3940566, y: -0.33136764, z: 0.8249461, w: -0.23319282}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 133.881, y: -496.986, z: 399.876}
+  m_LocalEulerAnglesHint: {x: 133.071, y: -586.529, z: 370.426}
 --- !u!21 &1640280708
 Material:
   serializedVersion: 8

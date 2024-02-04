@@ -12,7 +12,7 @@
 //DEBUG
 #define SHOW_CHEBYSHEV_WEIGHTS 0
 #define DEBUG_VISUALIZATION_MODE 0
-#define FIRST_FRAME 0
+#define FIRST_FRAME 1
 
 
 int OFFSET_BITS_PER_CHANNEL;
@@ -78,18 +78,18 @@ int findMSB(int x)
 
 int3 probeIndexToGridCoord(in DDGIVolume ddgiVolume, int index) {    
     /* Works for any # of probes */
-    int3 iPos;
-    iPos.x = index % ddgiVolume.probeCounts.x;
-    iPos.y = (index % (ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y)) / ddgiVolume.probeCounts.x;
-    iPos.z = index / (ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
+    // int3 iPos;
+    // iPos.x = index % ddgiVolume.probeCounts.x;
+    // iPos.y = (index % (ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y)) / ddgiVolume.probeCounts.x;
+    // iPos.z = index / (ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
 
-    //// Assumes probeCounts are powers of two.
-    //// Saves ~10ms compared to the divisions above
-    //// Precomputing the MSB actually slows this code down substantially
-    //int3 iPos;
-    //iPos.x = index & (ddgiVolume.probeCounts.x - 1);
-    //iPos.y = (index & ((ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y) - 1)) >> findMSB(ddgiVolume.probeCounts.x);
-    //iPos.z = index >> findMSB(ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
+    // Assumes probeCounts are powers of two.
+    // Saves ~10ms compared to the divisions above
+    // Precomputing the MSB actually slows this code down substantially
+    int3 iPos;
+    iPos.x = index & (ddgiVolume.probeCounts.x - 1);
+    iPos.y = (index & ((ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y) - 1)) >> findMSB(ddgiVolume.probeCounts.x);
+    iPos.z = index >> findMSB(ddgiVolume.probeCounts.x * ddgiVolume.probeCounts.y);
 
     return iPos;
 }
@@ -136,7 +136,7 @@ float3 gridCoordToPosition(in DDGIVolume ddgiVolume, int3 c) {
 
     float3 offset =
 #if FIRST_FRAME == 1
-        int3(0);
+        int3(0, 0, 0);
 #else
         readProbeOffset(ddgiVolume, C).xyz; // readProbeOffset multiplies by probe step.
 #endif
@@ -360,7 +360,6 @@ float4 sampleOneDDGIVolume
                 chebyshevWeight = max(pow(chebyshevWeight,3) - ddgiVolume.debugChebyshevBias, 0.0) * ddgiVolume.debugChebyshevNormalize;
 
             }
-
 
             // Avoid visibility weights ever going all of the way to zero because when *no* probe has
             // visibility we need some fallback value.

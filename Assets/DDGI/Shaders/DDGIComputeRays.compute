@@ -2,13 +2,12 @@
 #pragma kernel main
 #pragma multi_compile_local __ DEBUG_MODE
 
-
 #include <UnityPBSLighting.cginc>
 #include <UnityStandardBRDF.cginc>
 
+#include "SampleIrradianceField.cginc"
 #include "RayTraceUtilities.cginc"
 #include "RandomUtilities.cginc"
-#include "SampleIrradianceField.cginc"
 
 uint2 surfelSize;
 
@@ -31,49 +30,6 @@ float3 sunDirection;
 //DEBUG
 int Frame;
 
-
-float3 Shade(SurfaceOutputStandard s, float3 viewVec) {
-    // Fetch Normal Map from texture
-    float3 normalMap = s.Normal;
-  
-    // World normal (assuming normals are already in worldspace)
-    float3 worldNormal = normalMap;
-  
-    // View direction (camera to the current pixel)
-    float3 viewDir = normalize(viewVec);
-  
-    // Light direction (assuming a directional light, adjust for your light source)
-    float3 lightDir = normalize(sunDirection);
-  
-    // Half vector (used in specular reflection calculation)
-    float3 halfVec = normalize(viewDir + lightDir);
-  
-    // Lambertian reflection (Diffuse reflection)
-    float3 diffuseReflection = s.Albedo.rgb / M_PI;
-  
-    // Cook-Torrance BRDF with GGX microfacet model (Specular reflection)
-    float roughness = s.Smoothness * s.Smoothness;
-    float roughness2 = roughness * roughness;
-  
-    float NdotL = saturate(dot(worldNormal, lightDir));
-    float NdotV = saturate(dot(worldNormal, viewDir));
-    float NdotH = saturate(dot(worldNormal, halfVec));
-    float VdotH = saturate(dot(viewDir, halfVec));
-  
-    float D = roughness2 / (M_PI * pow(NdotH * NdotH * (roughness2 - 1) + 1, 2));
-    float G = min(1, min(2 * NdotH * min(NdotV, NdotL) / VdotH, 2 * NdotH * min(NdotV, NdotL) / NdotH));
-    float F = 0.04 + (1 - 0.04) * pow(1 - VdotH, 5);
-  
-    float3 specularReflection = (D * G * F) / (4 * NdotL * NdotV);
-  
-    // Occlusion factor (reducing specular reflections in occluded areas)
-    float occlusion = s.Occlusion;
-    float3 specularReflectionOcclud = specularReflection * occlusion;
-  
-    // Final color (Combining diffuse and specular reflections with occlusion)
-    return lerp(diffuseReflection, specularReflectionOcclud, s.Metallic) * (1 - occlusion) + s.Emission.rgb;
-}  
-
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID) 
 {   
@@ -94,29 +50,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
-        float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal*.2+viewVec*.8, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
-            //sampleIrradiance(DDGIVolumes[0], info.hitPoint, info.normal, DDGIVolumes[0].energyConservation, viewVec), 1);
-        
-        HitInfo shadowHit;
-        Ray shadowRay;
-        shadowRay.direction = -sunDirection;
-        shadowRay.origin = info.hitPoint + (info.normal * DDGIVolumes[0].selfShadowBias);
-        shadowRay.tMin = 0.01;
-        shadowRay.tMax = 1000.0;
-        int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
-        float4 directL = sunColor * max(dot(info.normal, -sunDirection), 0) * lit;
-        allLight = directL + indirectL;
-
-        SurfaceOutputStandard s;
-        s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
-        s.Normal = info.normal;
-        s.Emission = info.material.emissionColour * info.material.emissionStrength;
-        s.Metallic = info.material.specularProbability; // 0=non-metal, 1=metal
-        s.Smoothness = info.material.smoothness; // 0=rough, 1=smooth
-        s.Occlusion = 0; // occlusion (default 1)
-        s.Alpha = info.material.colour.w; // alpha for transparencies
-
-        allLight *= float4(Shade(s, viewVec), s.Alpha); 
+        allLight = ComputeShadingAt(info, viewVec, sunDirection, sunColor);
     }
     
     Write(rayDirections, texelPos, surfelSize, float4(ray.direction, info.dst));
