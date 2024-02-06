@@ -1,8 +1,13 @@
 Shader "DDGI/ScreenSpaceApplyDDGI"
 {
     HLSLINCLUDE
-    #include "UnityCG.cginc"
-    #include "SampleIrradianceField.cginc"
+	#include <UnityPBSLighting.cginc>
+
+	#include "UnityCG.cginc"
+	#include "SampleIrradianceField.cginc"
+	#include "RayTraceUtilities.cginc"
+
+	#pragma target 5.0
 
     sampler2D _MainTex;
     sampler2D _CameraDepthTexture;
@@ -108,16 +113,26 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 
             half4 Fragment(Varyings input) : SV_Target
             {
-                float3 wNormal = tex2D(_CameraGBufferTexture2, input.texcoord);
+				float depth;
+				float3 wNormal;
+				DecodeDepthNormal(tex2D(_CameraGBufferTexture2, input.texcoord), depth, wNormal);
 
                 float4 vpos = float4(ComputeViewSpacePosition(input), 1);
                 float4 wpos = mul(_InverseView, vpos);
 
+				if (distance(wpos, _WorldSpaceCameraPos) > 50.0)
+					return float4(0,0,0.1,1);
+
                 float3 viewDir = normalize(UnityWorldSpaceViewDir(wpos));
-                
+
                 float3 color = tex2D(_MainTex, input.texcoord);
-                float3 irradiance = abs(sampleIrradiance(DDGIVolumes, wpos, wNormal * 0.2 + viewDir * 0.8, wNormal, _WorldSpaceCameraPos, false, false, -1));
-                return float4(color + irradiance, 1);
+                float3 irradiance = sampleIrradiance(DDGIVolumes, wpos, wNormal * 0.2 + viewDir * 0.8, wNormal, _WorldSpaceCameraPos, false, false, -1);
+
+				if(wNormal.b > .5)
+				    return float4(wNormal * float3(0,0,1), 1);
+                    else
+                    return float4(0,0,0,0);
+				return float4(irradiance, 1);
             }
 
             ENDHLSL

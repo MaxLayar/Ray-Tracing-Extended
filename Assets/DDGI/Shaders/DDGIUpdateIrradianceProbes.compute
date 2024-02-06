@@ -38,9 +38,9 @@ int probeID(float2 texelXY, uint width) {
 float2 normalizedOctCoord(uint2 fragCoord) {
     int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
 
-    float2 octFragCoord = int2((fragCoord.x - 2) % probeWithBorderSide, (fragCoord.y - 2) % probeWithBorderSide);
+    float2 octFragCoord = int2(fragCoord.x % probeWithBorderSide, fragCoord.y % probeWithBorderSide) - int2(1, 1);
     // Add back the half pixel to get pixel center normalized coordinates
-    return (octFragCoord + float2(0.5f,0.5f))*(2.0f / float(PROBE_SIDE_LENGTH)) - float2(1.0f, 1.0f);
+    return (octFragCoord / (float)PROBE_SIDE_LENGTH) * 2.0 - float2(1.0, 1.0);
 }
 
 
@@ -82,7 +82,7 @@ void main(uint3 id : SV_DispatchThreadID)
 		uint2 C = uint2(r, relativeProbeID);
 		float3 rayDirection    = Load(rayDirections, C, surfelsTextureSize).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz * .85; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = Load(rayHitLocations, C, surfelsTextureSize).xyz;
 

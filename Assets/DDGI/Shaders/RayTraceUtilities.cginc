@@ -179,7 +179,7 @@ float3 Shade(SurfaceOutputStandard s, float3 viewVec, float3 sunDirection) {
     return lerp(diffuseReflection, specularReflectionOcclud, s.Metallic) * (1 - occlusion) + s.Emission.rgb;
 } 
 
-float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor)
+float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor, float maxDistance)
 {
     float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal*.2+viewVec*.8, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
         
@@ -188,10 +188,10 @@ float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float
     shadowRay.direction = -sunDirection;
     shadowRay.origin = info.hitPoint + (info.normal * DDGIVolumes[0].selfShadowBias);
     shadowRay.tMin = 0.01;
-    shadowRay.tMax = 1000.0;
+    shadowRay.tMax = maxDistance;
     int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
     float4 directL = sunColor * max(dot(info.normal, -sunDirection), 0) * lit;
-    float4 allLight = directL + indirectL;
+    float4 allLight = max(directL, 0.01) * indirectL;
 
     SurfaceOutputStandard s;
     s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
