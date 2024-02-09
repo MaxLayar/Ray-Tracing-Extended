@@ -137,49 +137,7 @@ bool TraceRay(in Ray ray, out HitInfo info)
     return CalculateRayCollision(ray, info);
 }
 
-float3 Shade(SurfaceOutputStandard s, float3 viewVec, float3 sunDirection) {
-    // Fetch Normal Map from texture
-    float3 normalMap = s.Normal;
-  
-    // World normal (assuming normals are already in worldspace)
-    float3 worldNormal = normalMap;
-  
-    // View direction (camera to the current pixel)
-    float3 viewDir = normalize(viewVec);
-  
-    // Light direction (assuming a directional light, adjust for your light source)
-    float3 lightDir = normalize(sunDirection);
-  
-    // Half vector (used in specular reflection calculation)
-    float3 halfVec = normalize(viewDir + lightDir);
-  
-    // Lambertian reflection (Diffuse reflection)
-    float3 diffuseReflection = s.Albedo.rgb / M_PI;
-  
-    // Cook-Torrance BRDF with GGX microfacet model (Specular reflection)
-    float roughness = s.Smoothness * s.Smoothness;
-    float roughness2 = roughness * roughness;
-  
-    float NdotL = saturate(dot(worldNormal, lightDir));
-    float NdotV = saturate(dot(worldNormal, viewDir));
-    float NdotH = saturate(dot(worldNormal, halfVec));
-    float VdotH = saturate(dot(viewDir, halfVec));
-  
-    float D = roughness2 / (M_PI * pow(NdotH * NdotH * (roughness2 - 1) + 1, 2));
-    float G = min(1, min(2 * NdotH * min(NdotV, NdotL) / VdotH, 2 * NdotH * min(NdotV, NdotL) / NdotH));
-    float F = 0.04 + (1 - 0.04) * pow(1 - VdotH, 5);
-  
-    float3 specularReflection = (D * G * F) / (4 * NdotL * NdotV);
-  
-    // Occlusion factor (reducing specular reflections in occluded areas)
-    float occlusion = s.Occlusion;
-    float3 specularReflectionOcclud = specularReflection * occlusion;
-  
-    // Final color (Combining diffuse and specular reflections with occlusion)
-    return lerp(diffuseReflection, specularReflectionOcclud, s.Metallic) * (1 - occlusion) + s.Emission.rgb;
-} 
-
-float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor, float maxDistance)
+float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor, float maxDistance, bool useIndirect)
 {
     float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal*.2+viewVec*.8, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
         
@@ -190,17 +148,33 @@ float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float
     shadowRay.tMin = 0.01;
     shadowRay.tMax = maxDistance;
     int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
-    float4 directL = sunColor * max(dot(info.normal, -sunDirection), 0) * lit;
-    float4 allLight = max(directL, 0.01) * indirectL;
 
     SurfaceOutputStandard s;
-    s.Albedo = info.material.colour.xyz; // base (diffuse or specular) color
-    s.Normal = info.normal;
+    s.Albedo = info.material.colour.rgb; // base (diffuse or specular) color
+    s.Normal = normalize(info.normal);
     s.Emission = info.material.emissionColour * info.material.emissionStrength;
     s.Metallic = info.material.specularProbability; // 0=non-metal, 1=metal
     s.Smoothness = info.material.smoothness; // 0=rough, 1=smooth
-    s.Occlusion = 0; // occlusion (default 1)
-    s.Alpha = info.material.colour.w; // alpha for transparencies
+    s.Alpha = info.material.colour.a; // alpha for transparencies
 
-    return allLight * float4(Shade(s, viewVec, sunDirection), s.Alpha); 
+    UnityLight light;
+    light.color = sunColor * lit;
+    light.dir = -sunDirection;
+
+    UnityIndirect indirect;
+    indirect.diffuse = useIndirect ? indirectL.rgb : 0;
+    indirect.specular = 0;
+
+    half oneMinusReflectivity;
+    half3 specColor;
+    s.Albedo = DiffuseAndSpecularFromMetallic (s.Albedo, s.Metallic, /*out*/ specColor, /*out*/ oneMinusReflectivity);
+
+    // shader relies on pre-multiply alpha-blend (_SrcBlend = One, _DstBlend = OneMinusSrcAlpha)
+    // this is necessary to handle transparency in physically correct way - only diffuse component gets affected by alpha
+    half outputAlpha;
+    s.Albedo = PreMultiplyAlpha (s.Albedo, s.Alpha, oneMinusReflectivity, /*out*/ outputAlpha);
+
+    half4 c = BRDF1_Unity_PBS (s.Albedo, specColor, oneMinusReflectivity, s.Smoothness, s.Normal, viewVec, light, indirect);
+    c.a = outputAlpha;
+    return c;
 }

@@ -3,7 +3,9 @@
 
 #include <UnityPBSLighting.cginc>
 
-#include "UnityCG.cginc"
+#include <UnityCG.cginc>
+#include <UnityStandardUtils.cginc>
+
 #include "SampleIrradianceField.cginc"
 #include "RayTraceUtilities.cginc"
 
@@ -39,19 +41,9 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
-
-        Result[id.xy] = float4(info.normal, 1);
-        //Result[id.xy] = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal * 0.2 + viewVec * 0.8, info.normal, _WorldSpaceCameraPos, false, false, -1),1);
-        return;
         
-        Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0);
+        Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true);
     }
     else
         Result[id.xy] = float4(0,0,.1,1);
 }
-
-// sampleIrradiance(ddgiVolumeArray,
-//         surfel.position,
-//         surfel.shadingNormal * 0.2 + w_o * 0.8,
-//         surfel.shadingNormal,
-//         cameraPos)

@@ -113,9 +113,7 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 
             half4 Fragment(Varyings input) : SV_Target
             {
-				float depth;
-				float3 wNormal;
-				DecodeDepthNormal(tex2D(_CameraGBufferTexture2, input.texcoord), depth, wNormal);
+				float3 wNormal = tex2D(_CameraGBufferTexture2, input.texcoord).rgb * 2 - 1;
 
                 float4 vpos = float4(ComputeViewSpacePosition(input), 1);
                 float4 wpos = mul(_InverseView, vpos);
@@ -128,10 +126,6 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
                 float3 color = tex2D(_MainTex, input.texcoord);
                 float3 irradiance = sampleIrradiance(DDGIVolumes, wpos, wNormal * 0.2 + viewDir * 0.8, wNormal, _WorldSpaceCameraPos, false, false, -1);
 
-				if(wNormal.b > .5)
-				    return float4(wNormal * float3(0,0,1), 1);
-                    else
-                    return float4(0,0,0,0);
 				return float4(irradiance, 1);
             }
 

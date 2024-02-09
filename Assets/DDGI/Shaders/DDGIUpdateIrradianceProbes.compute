@@ -82,7 +82,7 @@ void main(uint3 id : SV_DispatchThreadID)
 		uint2 C = uint2(r, relativeProbeID);
 		float3 rayDirection    = Load(rayDirections, C, surfelsTextureSize).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz * 0.85; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = Load(rayHitLocations, C, surfelsTextureSize).xyz;
 

@@ -50,7 +50,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
-        allLight = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0);
+        allLight = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, false);
     }
     
     Write(rayDirections, texelPos, surfelSize, float4(ray.direction, info.dst));
