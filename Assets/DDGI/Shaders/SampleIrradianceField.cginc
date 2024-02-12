@@ -10,11 +10,10 @@
 #define NUM_DDGIVOLUMES 1
 
 //DEBUG
-#define SHOW_CHEBYSHEV_WEIGHTS 0
-#define DEBUG_VISUALIZATION_MODE 0
-#define FIRST_FRAME 1
+int SHOW_CHEBYSHEV_WEIGHTS;
+int DEBUG_VISUALIZATION_MODE;
 
-
+int FIRST_FRAME;
 int OFFSET_BITS_PER_CHANNEL;
 float highestSignedValue;
 
@@ -323,9 +322,8 @@ float4 sampleOneDDGIVolume
 
             // The small offset at the end reduces the "going to zero" impact
             // where this is really close to exactly opposite
-#if SHOW_CHEBYSHEV_WEIGHTS == 0
-            weight *= sqrt((dot(trueDirectionToProbe, sampleDirection) + 1.0) * 0.5) + 0.2;
-#endif
+            if (SHOW_CHEBYSHEV_WEIGHTS == 0)
+                weight *= sqrt((dot(trueDirectionToProbe, sampleDirection) + 1.0) * 0.5) + 0.2;
         }
         
         // Bias the position at which visibility is computed; this avoids performing a shadow 
@@ -394,18 +392,17 @@ float4 sampleOneDDGIVolume
             probeIrradiance = sqrt(probeIrradiance);
         }
 
-#       if DEBUG_VISUALIZATION_MODE == 1
+        if (DEBUG_VISUALIZATION_MODE == 1)
         {
             int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
-			probeIrradiance = (p == debugProbeIndex) ? float3(1,1,1) : float3(0,0,0);
+            probeIrradiance = (p == debugProbeIndex) ? float3(1, 1, 1) : float3(0, 0, 0);
         }
-#       endif
-#       if SHOW_CHEBYSHEV_WEIGHTS == 1
-		{
-			int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
-			probeIrradiance = (p == debugProbeIndex) ? float3(1,1,1) : float3(0,0,0);
-		}
-#       endif
+
+        if (SHOW_CHEBYSHEV_WEIGHTS == 1)
+        {
+            int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
+            probeIrradiance = (p == debugProbeIndex) ? float3(1, 1, 1) : float3(0, 0, 0);
+        }
 
         irradiance += float4(weight * probeIrradiance, weight);
     }

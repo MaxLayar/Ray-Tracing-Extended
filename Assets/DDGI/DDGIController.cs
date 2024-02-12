@@ -107,6 +107,8 @@ public class DDGIController : MonoBehaviour
 		Irradiance,
 		Visibility,
 	}
+	public bool isDebugShowChebWeights;
+	public bool isDebugVisualizationMode;
 
 	[Header("DANGEROUS")]
 	public bool showHitPoints = false;
@@ -660,7 +662,6 @@ public class DDGIController : MonoBehaviour
 			// Create materials used in blits
 			ShaderHelper.InitMaterial(rasterizedDDGIShader, ref blitMaterial);
 
-			CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
 			blitMaterial.SetBuffer("DDGIVolumes", ddgiVolumesBuffer);
 
 			(int w, int h) irrSize = GetBufferDimensions(ddgiVolumes[0].irradianceProbeSideLength, ddgiVolumes[0].probeCounts);
@@ -671,7 +672,17 @@ public class DDGIController : MonoBehaviour
 			blitMaterial.SetBuffer("visibilityTexture", visibilityTexture);
 			blitMaterial.SetVector("visibilityTextureSize", new Vector4(visSize.w, visSize.h));
 
+			blitMaterial.SetBuffer("probeOffsetsTexture", probeOffsetsTexture);
+			blitMaterial.SetVector("probeOffsetsTextureSize", new Vector4(visSize.w, visSize.h));
+			blitMaterial.SetBuffer("probeOffsetsImage", probeOffsetsImage);
+			blitMaterial.SetVector("probeOffsetsImageSize", new Vector4(visSize.w, visSize.h));
+
 			blitMaterial.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel);
+
+			blitMaterial.SetInt("SHOW_CHEBYSHEV_WEIGHTS", isDebugShowChebWeights ? 1 : 0);
+			blitMaterial.SetInt("DEBUG_VISUALIZATION_MODE",isDebugVisualizationMode ? 1 : 0);
+
+			blitMaterial.SetInt("FIRST_FRAME", numRenderedFrames == 0 ? 1 : 0);
 
 			blitMaterial.SetMatrix("_InverseView", cam.cameraToWorldMatrix);
 			blitMaterial.SetMatrix("_ViewProjInv", (cam.projectionMatrix * cam.worldToCameraMatrix).inverse.transpose);
@@ -682,7 +693,6 @@ public class DDGIController : MonoBehaviour
 			RefreshBufferIfNeeded(ref resultTexture, "Result", cam.scaledPixelWidth, cam.scaledPixelHeight);
 			raytracedDDGIShader.SetTexture(0, "Result", resultTexture);
 
-			CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
 			raytracedDDGIShader.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
 			(int irrW, int irrH) = GetBufferDimensions(ddgiVolumes[0].irradianceProbeSideLength, ddgiVolumes[0].probeCounts);
@@ -695,7 +705,11 @@ public class DDGIController : MonoBehaviour
 			float planeWidth = planeHeight * cam.aspect;
 			raytracedDDGIShader.SetVector("ViewParams", new Vector3(planeWidth, planeHeight, cam.farClipPlane));
 			raytracedDDGIShader.SetMatrix("_CameraLocalToWorld", cam.transform.localToWorldMatrix);
+
 			raytracedDDGIShader.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel);
+			raytracedDDGIShader.SetInt("SHOW_CHEBYSHEV_WEIGHTS", isDebugShowChebWeights ? 1 : 0);
+			raytracedDDGIShader.SetInt("DEBUG_VISUALIZATION_MODE", isDebugVisualizationMode ? 1 : 0);
+			raytracedDDGIShader.SetInt("FIRST_FRAME", numRenderedFrames == 0 ? 1 : 0);
 
 			SetMeshesBuffer(raytracedDDGIShader);
 			SetLightsValues(raytracedDDGIShader);

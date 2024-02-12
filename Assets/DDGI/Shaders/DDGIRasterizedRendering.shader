@@ -121,10 +121,14 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 				if (distance(wpos, _WorldSpaceCameraPos) > 50.0)
 					return float4(0,0,0.1,1);
 
-                float3 viewDir = normalize(UnityWorldSpaceViewDir(wpos));
+				float3 wNormal = tex2D(_CameraGBufferTexture2, input.texcoord).rgb * 2. - 1.;
+				wNormal = normalize(wNormal);
 
+                float3 viewVec = normalize(UnityWorldSpaceViewDir(wpos));
+
+                float3 irradiance = sampleIrradiance(DDGIVolumes, wpos, wNormal*.2+viewVec*.8, wNormal, _WorldSpaceCameraPos, false, false, -1);
+				
                 float3 color = tex2D(_MainTex, input.texcoord);
-                float3 irradiance = sampleIrradiance(DDGIVolumes, wpos, wNormal * 0.2 + viewDir * 0.8, wNormal, _WorldSpaceCameraPos, false, false, -1);
 
 				return float4(irradiance, 1);
             }
