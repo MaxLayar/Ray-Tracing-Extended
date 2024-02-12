@@ -100,6 +100,39 @@ HitInfo RayTriangle(Ray ray, Triangle tri)
     return hitInfo;
 }
 
+// Calculate the intersection of a ray with a sphere
+HitInfo RaySphere(Ray ray, float3 sphereCentre, float sphereRadius)
+{
+    HitInfo hitInfo = (HitInfo)0;
+    float3 offsetRayOrigin = ray.origin - sphereCentre;
+    // From the equation: sqrLength(rayOrigin + rayDir * dst) = radius^2
+    // Solving for dst results in a quadratic equation with coefficients:
+    float a = dot(ray.direction, ray.direction); // a = 1 (assuming unit vector)
+    float b = 2 * dot(offsetRayOrigin, ray.direction);
+    float c = dot(offsetRayOrigin, offsetRayOrigin) - sphereRadius * sphereRadius;
+    // Quadratic discriminant
+    float discriminant = b * b - 4 * a * c; 
+
+    // No solution when d < 0 (ray misses sphere)
+    if (discriminant >= 0) {
+        // Distance to nearest intersection point (from quadratic formula)
+        float dst = (-b - sqrt(discriminant)) / (2 * a);
+
+        // Ignore intersections that occur behind the ray
+        if (dst >= 0) {
+            hitInfo.didHit = true;
+            hitInfo.dst = dst;
+            hitInfo.hitPoint = ray.origin + ray.direction * dst;
+            hitInfo.normal = normalize(hitInfo.hitPoint - sphereCentre);
+        }
+    }
+    return hitInfo;
+}
+#if defined(SHOW_PROBES)
+StructuredBuffer<float3> ProbesPositions;
+float DebugProbesRadius;
+#endif
+
 // Find the first point that the given ray collides with, and return hit info
 bool CalculateRayCollision(in Ray ray, out HitInfo info)
 {
@@ -107,6 +140,29 @@ bool CalculateRayCollision(in Ray ray, out HitInfo info)
     // We haven't hit anything yet, so 'closest' hit is infinitely far away
     closestHit.dst = 1.#INF;
 
+    #if defined(SHOW_PROBES)
+    int numProbes = DDGIVolumes[0].probeCounts.x * DDGIVolumes[0].probeCounts.y * DDGIVolumes[0].probeCounts.z;
+    // Raycast against all spheres and keep info about the closest hit
+    for (int i = 0; i < numProbes; i ++)
+    {
+        HitInfo hitInfo = RaySphere(ray, ProbesPositions[i], DebugProbesRadius);
+
+        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        {
+            closestHit = hitInfo;
+            
+            RayTracingMaterial m = (RayTracingMaterial) 0;
+
+            int3 probeGridCoord = probeIndexToGridCoord(DDGIVolumes[0], i);
+            float2 texCoord = probeTextureCoordFromDirection(hitInfo.normal, probeGridCoord, true, DDGIVolumes[0]);
+
+            m.colour = Load(irradianceTexture, texCoord, irradianceTextureSize);
+
+            closestHit.material = m;
+        }
+    }
+    #endif
+    
     // Raycast against all meshes and keep info about the closest hit
     for (int meshIndex = 0; meshIndex < NumMeshes; meshIndex ++)
     {

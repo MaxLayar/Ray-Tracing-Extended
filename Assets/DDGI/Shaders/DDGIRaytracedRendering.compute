@@ -1,5 +1,6 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
+#pragma multi_compile_local __ SHOW_PROBES
 
 #include <UnityPBSLighting.cginc>
 
@@ -45,8 +46,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
         
-        Result[id.xy] = //float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal, info.normal, _WorldSpaceCameraPos, debugDisableBackface, debugDisableChebyshev, -1), 1);
-        ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true, debugDisableBackface, debugDisableChebyshev);
+        Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true, debugDisableBackface, debugDisableChebyshev);
     }
     else
         Result[id.xy] = float4(0,0,.1,1);

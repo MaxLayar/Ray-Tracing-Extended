@@ -90,6 +90,7 @@ public class DDGIController : MonoBehaviour
 
 	[Space(20), Header("     DEBUG"), Space(5)]
 	public bool debugShowProbes = false;
+	public float debugShowProbesRadius = .2f;
 	public bool isRealtimeRaytracing = false;
 	public bool isRandomDirection = true;
 	public RenderTexture debugTexture;
@@ -490,7 +491,7 @@ public class DDGIController : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        if (debugShowProbes)
+        if (debugShowProbes && !isRaytracingRendering)
         {
 			int probeID = 0;
             foreach (var probe in probesPositions)
@@ -719,6 +720,17 @@ public class DDGIController : MonoBehaviour
 			raytracedDDGIShader.SetInt("FIRST_FRAME", numRenderedFrames == 0 ? 1 : 0);
 			raytracedDDGIShader.SetBool("debugDisableBackface", isDebugDisableBackface);
 			raytracedDDGIShader.SetBool("debugDisableChebyshev", isDebugDisableChebyshev);
+
+			if (debugShowProbes)
+			{
+				raytracedDDGIShader.EnableKeyword("SHOW_PROBES");
+				raytracedDDGIShader.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
+				raytracedDDGIShader.SetFloat("DebugProbesRadius", debugShowProbesRadius);
+			}
+			else
+				raytracedDDGIShader.DisableKeyword("SHOW_PROBES");
+
+			//raytracedDDGIShader.SetKeyword("SHOW_PROBES", debugShowProbes);
 
 			SetMeshesBuffer(raytracedDDGIShader);
 			SetLightsValues(raytracedDDGIShader);

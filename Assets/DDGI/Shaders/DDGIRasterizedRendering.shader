@@ -5,7 +5,6 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 
 	#include "UnityCG.cginc"
 	#include "SampleIrradianceField.cginc"
-	#include "RayTraceUtilities.cginc"
 
 	#pragma target 5.0
 

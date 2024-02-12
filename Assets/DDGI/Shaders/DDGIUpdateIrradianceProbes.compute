@@ -1,7 +1,7 @@
 #pragma kernel main
-#pragma multi_compile __ OUTPUT_IRRADIANCE
-#pragma multi_compile __ DEBUG_MODE
-#pragma multi_compile __ OUTPUT_IRRADIANCE DEBUG_MODE
+#pragma multi_compile_local __ OUTPUT_IRRADIANCE
+#pragma multi_compile_local __ DEBUG_MODE
+#pragma multi_compile_local __ OUTPUT_IRRADIANCE DEBUG_MODE
 
 #include "OctahedralUtilities.cginc"
 #include "ShaderVariables.cginc"
