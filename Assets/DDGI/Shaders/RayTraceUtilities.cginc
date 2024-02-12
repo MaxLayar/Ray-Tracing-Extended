@@ -137,10 +137,10 @@ bool TraceRay(in Ray ray, out HitInfo info)
     return CalculateRayCollision(ray, info);
 }
 
-float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor, float maxDistance, bool useIndirect)
+float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor, float maxDistance, bool useIndirect, bool debugDisableBackface, bool debugDisableChebyshev)
 {
-    float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal*.2+viewVec*.8, info.normal, _WorldSpaceCameraPos, false, false, -1), 1);
-        
+    float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal, info.normal, _WorldSpaceCameraPos, debugDisableBackface, debugDisableChebyshev, -1), 1);
+
     HitInfo shadowHit;
     Ray shadowRay;
     shadowRay.direction = -sunDirection;

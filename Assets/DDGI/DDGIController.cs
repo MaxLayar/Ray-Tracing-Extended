@@ -109,6 +109,9 @@ public class DDGIController : MonoBehaviour
 	}
 	public bool isDebugShowChebWeights;
 	public bool isDebugVisualizationMode;
+	public bool isDebugDisableBackface;
+	public bool isDebugDisableChebyshev;
+
 
 	[Header("DANGEROUS")]
 	public bool showHitPoints = false;
@@ -305,6 +308,9 @@ public class DDGIController : MonoBehaviour
 		
         computeRays.SetMatrix("randomOrientation", randomOrientationMatrix);
 
+		computeRays.SetBool("debugDisableBackface", isDebugDisableBackface);
+		computeRays.SetBool("debugDisableChebyshev", isDebugDisableChebyshev);
+
 		//DEBUG
 		if(debugTexture && debugTextureAtPass is DDGIPass.Rays)
 		{
@@ -453,6 +459,7 @@ public class DDGIController : MonoBehaviour
         probesPositions = new Vector3[copy.probeCounts.x * copy.probeCounts.y * copy.probeCounts.z];
 
         int idx = 0;
+		
 		for (int z = 0; z < copy.probeCounts.z; z++)
 		{
 			for (int y = 0; y < copy.probeCounts.y; y++)
@@ -680,7 +687,7 @@ public class DDGIController : MonoBehaviour
 			blitMaterial.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel);
 
 			blitMaterial.SetInt("SHOW_CHEBYSHEV_WEIGHTS", isDebugShowChebWeights ? 1 : 0);
-			blitMaterial.SetInt("DEBUG_VISUALIZATION_MODE",isDebugVisualizationMode ? 1 : 0);
+			blitMaterial.SetInt("DEBUG_VISUALIZATION_MODE", isDebugVisualizationMode ? 1 : 0);
 
 			blitMaterial.SetInt("FIRST_FRAME", numRenderedFrames == 0 ? 1 : 0);
 
@@ -710,6 +717,8 @@ public class DDGIController : MonoBehaviour
 			raytracedDDGIShader.SetInt("SHOW_CHEBYSHEV_WEIGHTS", isDebugShowChebWeights ? 1 : 0);
 			raytracedDDGIShader.SetInt("DEBUG_VISUALIZATION_MODE", isDebugVisualizationMode ? 1 : 0);
 			raytracedDDGIShader.SetInt("FIRST_FRAME", numRenderedFrames == 0 ? 1 : 0);
+			raytracedDDGIShader.SetBool("debugDisableBackface", isDebugDisableBackface);
+			raytracedDDGIShader.SetBool("debugDisableChebyshev", isDebugDisableChebyshev);
 
 			SetMeshesBuffer(raytracedDDGIShader);
 			SetLightsValues(raytracedDDGIShader);

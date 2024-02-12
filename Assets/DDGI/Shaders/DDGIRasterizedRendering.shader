@@ -113,8 +113,6 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 
             half4 Fragment(Varyings input) : SV_Target
             {
-				float3 wNormal = tex2D(_CameraGBufferTexture2, input.texcoord).rgb * 2 - 1;
-
                 float4 vpos = float4(ComputeViewSpacePosition(input), 1);
                 float4 wpos = mul(_InverseView, vpos);
 

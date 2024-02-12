@@ -6,6 +6,7 @@
 #include "OctahedralUtilities.cginc"
 #include "ShaderVariables.cginc"
 #include "ShaderUtilities.cginc"
+#include "ProbesUtilities.cginc"
 
 int RAYS_PER_PROBE;
 
@@ -25,24 +26,6 @@ RWStructuredBuffer<float4> rayOrigins;
 #endif
 RWStructuredBuffer<float4> rayDirections;
 uint2 surfelsTextureSize;
-
-int PROBE_SIDE_LENGTH;
-
-int probeID(float2 texelXY, uint width) {
-    int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
-    int probesPerSide = width / probeWithBorderSide;
-    return int(texelXY.x / probeWithBorderSide) + probesPerSide * int(texelXY.y / probeWithBorderSide);
-}
-
-// Compute normalized oct coord, mapping top left of top left pixel to (-1,-1)
-float2 normalizedOctCoord(uint2 fragCoord) {
-    int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
-
-    float2 octFragCoord = int2(fragCoord.x % probeWithBorderSide, fragCoord.y % probeWithBorderSide) - int2(1, 1);
-    // Add back the half pixel to get pixel center normalized coordinates
-    return (octFragCoord / (float)PROBE_SIDE_LENGTH) * 2.0 - float2(1.0, 1.0);
-}
-
 
 float square(float f)
 {
@@ -65,7 +48,7 @@ void main(uint3 id : SV_DispatchThreadID)
     float4 result = float4(0,0,0,0);
 
     if(texelPos.x >= outputBufferSize.x -1 || texelPos.y >= outputBufferSize.y -1 || texelPos.x < 1 || texelPos.y < 1) return;
-    int relativeProbeID = probeID(texelPos, outputBufferSize.x);
+    int relativeProbeID = texelToIndex(texelPos, outputBufferSize.x);
 
     if (relativeProbeID == -1) {
         Write(outputBuffer, texelPos, outputBufferSize, result);
@@ -75,7 +58,7 @@ void main(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    float3 texelDirection = octDecode(normalizedOctCoord(texelPos));
+    float3 texelDirection = octDecode(normalizedOctCoord(texelPos, PROBE_SIDE_LENGTH));
 
     // For each ray
 	for (int r = 0; r < RAYS_PER_PROBE; ++r) {
@@ -92,7 +75,7 @@ void main(uint3 id : SV_DispatchThreadID)
 
         rayHitLocation += rayHitNormal * 0.08f;
 
-		float rayProbeDistance = min(DDGIVolumes[0].maxDistance, length(probeLocation - rayHitLocation));
+		float rayProbeDistance = min(DDGIVolumes[0].maxDistance, distance(probeLocation, rayHitLocation));
         
         // Detect misses and force depth
         if (dot(rayHitNormal, rayHitNormal) < 1e-6)
@@ -105,25 +88,24 @@ void main(uint3 id : SV_DispatchThreadID)
 #ifdef OUTPUT_IRRADIANCE
         float weight = max(0.0, dot(rayDirection, texelDirection));
 #else
-        float weight = pow(max(0.0, dot(texelDirection, rayDirection)), DDGIVolumes[0].depthSharpness);
+        float weight = pow(max(0.0, dot(rayDirection, texelDirection)), DDGIVolumes[0].depthSharpness);
 #endif
-        //if (weight >= epsilon) {
+        // if (weight >= 1e-6) {
             // Storing the sum of the weights in alpha temporarily
 #ifdef OUTPUT_IRRADIANCE
             result += float4(rayHitRadiance_ * weight, weight);
 #else
-            result += float4(abs(rayProbeDistance) * weight,
-                square(abs(rayProbeDistance)) * weight,
+            result += float4(rayProbeDistance * weight,
+                square(rayProbeDistance) * weight,
                 0.0,
                 weight);
 #endif
-        //}
+        // }
 		
 	}
     
     float epsilon = 1e-9 * float(RAYS_PER_PROBE);
     result.xyz *= 1.0 / max(result.w, epsilon);
-    //result.w = 1.0f - DDGIVolumes[0].hysteresis;
 
     float4 old = Load(outputBuffer, texelPos, outputBufferSize);
     

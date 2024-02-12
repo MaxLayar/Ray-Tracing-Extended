@@ -21,26 +21,18 @@ bool isAtProbeBorder(uint2 pos, out bool isAtProbeX, out bool isAtProbeY)
     isAtProbeX = (pos.x % gap == 0) || ((pos.x % gap) == gap - 1);
     isAtProbeY = (pos.y % gap == 0) || ((pos.y % gap) == gap - 1);
     return isAtProbeX || isAtProbeY;
-
-    // // Calculate the pixel position in the probe space
-    // int2 probeSpaceCoord = int2(fmod(pos, PROBE_SIDE_LENGTH + 2));
-    // isAtProbeX = (probeSpaceCoord.x < 2);
-    // isAtProbeY = (probeSpaceCoord.y < 2);
-    
-    // // Check if any component is less than 2
-    // return isAtProbeX || isAtProbeY;
 }
 
 
-// uint mirrored(uint pos)
-// {
-//     uint gap = 2 + PROBE_SIDE_LENGTH;
-//     uint probe = (pos-2) / gap;
-//     uint startPoint = (probe * gap)+2;
-//     float midPoint = startPoint + (PROBE_SIDE_LENGTH-1) / 2.0;
-//     float dst = midPoint - pos;
-//     return pos + dst * 2;
-// }
+uint mirrored(uint pos)
+{
+    uint gap = 2 + PROBE_SIDE_LENGTH;
+    uint probe = pos / gap;
+    uint startPoint = probe * gap;
+    float midPoint = startPoint + (PROBE_SIDE_LENGTH-1) / 2.0;
+    float dst = midPoint - pos;
+    return pos + dst * 2;
+}
 
 
 /*
@@ -54,24 +46,23 @@ XXX|XXX <-- on this half?
 */
 int leftOrRight(int pos)
 {
-    pos = pos - 1;
     uint probeWithBorderSize = 2 + PROBE_SIDE_LENGTH;
     uint posInProbe = pos % probeWithBorderSize;
     uint middle = probeWithBorderSize / 2;
     return posInProbe < middle ? 1 : -1;
 }
 
-uint mirrored(int pos)
-{
-    pos = pos - 1;
-    uint probeWithBorderSize = 2 + PROBE_SIDE_LENGTH;
-    uint posInProbe = pos % probeWithBorderSize;
-    uint probe = uint(pos / probeWithBorderSize);
-    uint probeStart = (probe * probeWithBorderSize) + 1;
-    uint middle = probeWithBorderSize / 2;
-    int dstToMiddle = middle - posInProbe;
-    return probeStart + middle + dstToMiddle - 1;
-}
+// uint mirrored(int pos)
+// {
+//     pos = pos - 1;
+//     uint probeWithBorderSize = 2 + PROBE_SIDE_LENGTH;
+//     uint posInProbe = pos % probeWithBorderSize;
+//     uint probe = uint(pos / probeWithBorderSize);
+//     uint probeStart = (probe * probeWithBorderSize) + 1;
+//     uint middle = probeWithBorderSize / 2;
+//     int dstToMiddle = middle - posInProbe;
+//     return probeStart + middle + dstToMiddle - 1;
+// }
 
 [numthreads(8,8,1)]
 void mainWriteOnesToBorder(uint3 id : SV_DispatchThreadID) 
@@ -139,6 +130,7 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
             return;
         }
     }
+
     #ifdef DEBUG_MODE
     debugTex[texelPos] = Load(probesBuffer, texelPos, probesBufferSize);
     #endif

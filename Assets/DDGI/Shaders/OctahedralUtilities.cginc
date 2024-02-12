@@ -32,3 +32,13 @@ float3 octDecode(float2 o) {
     }
     return normalize(v);
 }
+
+
+// Compute normalized oct coord, mapping top left of top left pixel to (-1,-1)
+float2 normalizedOctCoord(uint2 fragCoord, int PROBE_SIDE_LENGTH) {
+    int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
+
+    float2 octFragCoord = int2(fragCoord.x % probeWithBorderSide, fragCoord.y % probeWithBorderSide) - int2(1, 1);
+    // Add back the half pixel to get pixel center normalized coordinates
+    return (octFragCoord / (float)PROBE_SIDE_LENGTH) * 2.0 - 1.0;
+}

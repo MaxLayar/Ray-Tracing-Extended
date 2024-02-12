@@ -29,6 +29,8 @@ float3 sunDirection;
 
 //DEBUG
 int Frame;
+bool debugDisableBackface;
+bool debugDisableChebyshev;
 
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID) 
@@ -50,7 +52,7 @@ void main(uint3 id : SV_DispatchThreadID)
     if (TraceRay(ray, info))
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
-        allLight = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, false);
+        allLight = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, false, debugDisableBackface, debugDisableChebyshev);
     }
     
     Write(rayDirections, texelPos, surfelSize, float4(ray.direction, info.dst));

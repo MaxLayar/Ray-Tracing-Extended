@@ -20,6 +20,9 @@ float3 ViewParams;
 float4 sunColor;
 float3 sunDirection;
 
+bool debugDisableBackface;
+bool debugDisableChebyshev;
+
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
@@ -42,7 +45,8 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
         
-        Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true);
+        Result[id.xy] = //float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal, info.normal, _WorldSpaceCameraPos, debugDisableBackface, debugDisableChebyshev, -1), 1);
+        ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true, debugDisableBackface, debugDisableChebyshev);
     }
     else
         Result[id.xy] = float4(0,0,.1,1);
