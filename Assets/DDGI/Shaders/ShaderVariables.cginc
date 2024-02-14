@@ -25,9 +25,9 @@ struct DDGIVolume
     float debugChebyshevNormalize; // 1/(1-debugChebyshevBias) = 1 in production code
     int cameraLocked;
 
-    float energyConservation;
     float depthSharpness;
     float hysteresis;
+    float energyConservation;
     float maxDistance;
 };
 

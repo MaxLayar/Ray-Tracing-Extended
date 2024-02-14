@@ -79,8 +79,6 @@ public class DDGIController : MonoBehaviour
 	public ComputeShader computeIrradiance;
 	public ComputeShader computeBorders;
 
-	public float chebBias = 0;
-
 	[Space(20), Header("     Scene Objects"), Space(5)]
 	ComputeBuffer triangleBuffer;
 	ComputeBuffer meshInfoBuffer;
@@ -421,13 +419,13 @@ public class DDGIController : MonoBehaviour
 		copy.invVisibilityTextureSize = DivideVectors(Vector2.one, new Vector2(visW, visH));
 
 		copy.invIrradianceGamma = 1.0f / copy.irradianceGamma;
+		copy.debugChebyshevNormalize = 1f / (1f-copy.debugChebyshevBias);
 
 		Vector3 probeEnd = copy.probeGridOrigin + MultiplyVectors(copy.probeCounts - Vector3Int.one, copy.probeSpacing);
 		Vector3 probeSpan = probeEnd - copy.probeGridOrigin;
 		copy.maxDistance = Vector3.Magnitude(DivideVectors(probeSpan, copy.probeCounts)) * 1.25f;
 		ddgiVolumes[0] = copy;
 
-		numRaysPerPixel = Mathf.Max(1, numRaysPerPixel);
 		isWriteOnesDone = false;
     }
 
@@ -597,10 +595,6 @@ public class DDGIController : MonoBehaviour
 	// 	RenderTexture.active = rt;
 	// }
 
-
-
-	[Header("Ray Tracing Settings")]
-	[SerializeField, Range(0, 64)] int numRaysPerPixel = 2;
 
 
 	[Header("View Settings")]
