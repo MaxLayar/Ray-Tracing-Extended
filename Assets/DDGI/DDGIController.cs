@@ -118,10 +118,6 @@ public class DDGIController : MonoBehaviour
 	public bool showHitPoints = false;
 	public int offsetBitsPerChannel;
 
-	Texture2D hitPointsDebugTexture;
-	Texture2D hitNormalsDebugTexture;
-	Texture2D hitRadianceDebugTexture;
-
 	void OnEnable()
 	{
 		if (ddgiVolumes == null)
@@ -504,32 +500,30 @@ public class DDGIController : MonoBehaviour
             }
         }
 
-		// if (showHitPoints)
-		// {
-		// 	hitPointsDebugTexture = GetRTPixels(rayHitLocationsBuffer);
-		// 	hitNormalsDebugTexture = GetRTPixels(rayHitNormalsBuffer);
-		// 	hitRadianceDebugTexture = GetRTPixels(rayHitRadianceBuffer);
+		if (showHitPoints)
+		{
+			Vector4[] hitPointsData = new Vector4[rayHitLocationsBuffer.count];
+			Vector4[] hitNormalsData = new Vector4[rayHitNormalsBuffer.count];
+			Vector4[] hitRadianceData = new Vector4[rayHitRadianceBuffer.count];
 
-		// 	for (int y = 0; y < rayHitLocationsBuffer.height; y++)
-		// 	{
-		// 		for (int x = 0; x < rayHitLocationsBuffer.width; x++)
-		// 		{
-		// 			//Gizmos.color = GetProbeColor(y);
-		// 			Gizmos.color = hitRadianceDebugTexture.GetPixel(x, y);
+			rayHitLocationsBuffer.GetData(hitPointsData);
+			rayHitNormalsBuffer.GetData(hitNormalsData);
+			rayHitRadianceBuffer.GetData(hitRadianceData);
 
-		// 			Color positionColor = hitPointsDebugTexture.GetPixel(x, y);
-		// 			Vector3 position = new Vector3(positionColor.r, positionColor.g, positionColor.b);
-		// 			Gizmos.DrawSphere(position, GizmoUtility.iconSize / 4);
+			for (int i = 0; i < hitPointsData.Length; i++)
+			{
+				Gizmos.color = hitRadianceData[i];
 
-		// 			Color normalColor = hitNormalsDebugTexture.GetPixel(x, y);
-		// 			Vector3 normal = new Vector3(normalColor.r, normalColor.g, normalColor.b);
-		// 			Gizmos.DrawRay(position, DivideVectors(normal, new Vector3(10,10,10)));
+				Vector3 position = new Vector3(hitPointsData[i].x, hitPointsData[i].y, hitPointsData[i].z);
+				Gizmos.DrawSphere(position, GizmoUtility.iconSize / 4);
 
-		// 			Gizmos.color *= new Color(1,1,1,.1f);
-		// 			Gizmos.DrawLine(position, probesPositions[y]);
-		// 		}
-		// 	}
-		// }
+				Vector3 normal = new Vector3(hitNormalsData[i].x, hitNormalsData[i].y, hitNormalsData[i].z);
+				Gizmos.DrawRay(position, DivideVectors(normal, new Vector3(10, 10, 10)));
+
+				Gizmos.color *= new Color(1, 1, 1, .1f);
+				Gizmos.DrawLine(position, probesPositions[i / numRaysPerProbe]);
+			}
+		}
 	}
 
 	static public Texture2D GetRTPixels(RenderTexture rt)
