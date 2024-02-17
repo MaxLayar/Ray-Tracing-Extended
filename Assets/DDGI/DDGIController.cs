@@ -485,19 +485,6 @@ public class DDGIController : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        if (debugShowProbes && !isRaytracingRendering)
-        {
-			int probeID = 0;
-            foreach (var probe in probesPositions)
-			{
-				Gizmos.color = GetProbeColor(probeID++);
-				Gizmos.DrawSphere(probe, GizmoUtility.iconSize);
-
-				Gizmos.color = Color.red;
-				Gizmos.DrawRay(probe, randomOrientationMatrix.GetColumn(2));
-            }
-        }
-
 		if (showHitPoints)
 		{
 			Vector4[] hitPointsData = new Vector4[rayHitLocationsBuffer.count];
@@ -682,6 +669,15 @@ public class DDGIController : MonoBehaviour
 
 			blitMaterial.SetMatrix("_InverseView", cam.cameraToWorldMatrix);
 			blitMaterial.SetMatrix("_ViewProjInv", (cam.projectionMatrix * cam.worldToCameraMatrix).inverse.transpose);
+
+			if (debugShowProbes)
+			{
+				blitMaterial.EnableKeyword("SHOW_PROBES");
+				blitMaterial.SetBuffer("ProbesPositions", probesPositionsBuffer);
+				blitMaterial.SetFloat("DebugProbesRadius", debugShowProbesRadius);
+			}
+			else
+				blitMaterial.DisableKeyword("SHOW_PROBES");
 		}
 		else
 		{
@@ -717,8 +713,6 @@ public class DDGIController : MonoBehaviour
 			}
 			else
 				raytracedDDGIShader.DisableKeyword("SHOW_PROBES");
-
-			//raytracedDDGIShader.SetKeyword("SHOW_PROBES", debugShowProbes);
 
 			SetMeshesBuffer(raytracedDDGIShader);
 			SetLightsValues(raytracedDDGIShader);
@@ -791,10 +785,12 @@ public class DDGIController : MonoBehaviour
 	{
 		if (!buffer)
 		{
-			buffer = new RenderTexture(width, heigh, 16, UnityEngine.Experimental.Rendering.DefaultFormat.HDR);
-			buffer.enableRandomWrite = true;
-			buffer.name = bufferName;
-		}
+            buffer = new RenderTexture(width, heigh, 16, UnityEngine.Experimental.Rendering.DefaultFormat.HDR)
+			{
+                enableRandomWrite = true,
+                name = bufferName
+            };
+        }
 
 		if (buffer.width != width || buffer.height != heigh)
 		{

@@ -1,6 +1,8 @@
 Shader "DDGI/ScreenSpaceApplyDDGI"
 {
     HLSLINCLUDE
+    #pragma multi_compile_local __ SHOW_PROBES
+
 	#include <UnityPBSLighting.cginc>
 
 	#include "UnityCG.cginc"
@@ -14,6 +16,11 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
 
     float4x4 _InverseView;
     float4x4 _ViewProjInv;
+
+#if defined(SHOW_PROBES)
+    StructuredBuffer<float3> ProbesPositions;
+    float DebugProbesRadius;
+#endif
 
     struct Varyings
     {
@@ -95,6 +102,18 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
         return WorldPos.xyz / WorldPos.w;
     }
 
+    // https://www.iquilezles.org/www/articles/spherefunctions/spherefunctions.htm
+    float sphIntersect(float3 ro, float3 rd, float4 sph)
+    {
+        float3 oc = ro - sph.xyz;
+        float b = dot( oc, rd );
+        float c = dot( oc, oc ) - sph.w*sph.w;
+        float h = b*b - c;
+        if( h<0.0 ) return -1.0;
+        h = sqrt( h );
+        return -b - h;
+    }
+
     ENDHLSL
     Properties
     {
@@ -115,19 +134,58 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
                 float4 vpos = float4(ComputeViewSpacePosition(input), 1);
                 float4 wpos = mul(_InverseView, vpos);
 
-				if (distance(wpos, _WorldSpaceCameraPos) > 50.0)
-					return float4(0,0,0.1,1);
-
 				float3 wNormal = tex2D(_CameraGBufferTexture2, input.texcoord).rgb * 2. - 1.;
 				wNormal = normalize(wNormal);
 
+                int notSphereHit = 1;
+
+#if defined(SHOW_PROBES)
+                // ray origin
+                float3 rayOrigin = _WorldSpaceCameraPos.xyz;
+
+                // normalize ray vector
+                float3 rayDir = normalize(wpos - _WorldSpaceCameraPos.xyz);
+
+                float dist = distance(wpos, _WorldSpaceCameraPos);
+
+                int numProbes = DDGIVolumes[0].probeCounts.x * DDGIVolumes[0].probeCounts.y * DDGIVolumes[0].probeCounts.z;
+
+                float minDist = dist;
+
+                for(int i = 0; i < numProbes; i++)
+                {
+                    float3 spherePos = ProbesPositions[i];
+
+                    // ray box intersection
+                    float rayHit = sphIntersect(rayOrigin, rayDir, float4(spherePos, DebugProbesRadius));
+                    
+                    if (rayHit < 0)
+                        continue;
+                    
+                    if (rayHit >= minDist)
+                        continue;
+                    
+                    minDist = rayHit;
+
+                    notSphereHit = 0;
+
+                    // override world space position from ray, front hit ray length, and ray origin
+                    wpos = float4(rayDir * rayHit + rayOrigin, 0);
+
+                    // override world space surface normal
+                    wNormal = normalize(wpos - spherePos);
+                }
+#endif
+                if (distance(wpos, _WorldSpaceCameraPos) > 50.0)
+                    return float4(0,0,0.1,1);
+                    
                 float3 viewVec = normalize(UnityWorldSpaceViewDir(wpos));
 
                 float3 irradiance = sampleIrradiance(DDGIVolumes, wpos, wNormal*.2+viewVec*.8, wNormal, _WorldSpaceCameraPos, false, false, -1);
-				
+
                 float3 color = tex2D(_MainTex, input.texcoord);
 
-				return float4(irradiance, 1);
+                return float4(irradiance + color * notSphereHit, 1);
             }
 
             ENDHLSL

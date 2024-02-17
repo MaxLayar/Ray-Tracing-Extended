@@ -172,7 +172,6 @@ float4 sampleOneDDGIVolume
                 
                 // Increase contrast in the weight
                 chebyshevWeight = max(pow(chebyshevWeight,3) - ddgiVolume.debugChebyshevBias, 0.0) * ddgiVolume.debugChebyshevNormalize;
-
             }
             
             // Avoid visibility weights ever going all of the way to zero because when *no* probe has
