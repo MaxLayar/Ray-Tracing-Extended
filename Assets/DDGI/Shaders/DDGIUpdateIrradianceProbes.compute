@@ -65,7 +65,7 @@ void main(uint3 id : SV_DispatchThreadID)
 		uint2 C = uint2(r, relativeProbeID);
 		float3 rayDirection    = Load(rayDirections, C, surfelsTextureSize).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz * 0.85; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz * 0.95; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
 		float3  rayHitLocation  = Load(rayHitLocations, C, surfelsTextureSize).xyz;
 
@@ -90,7 +90,7 @@ void main(uint3 id : SV_DispatchThreadID)
 #else
         float weight = pow(max(0.0, dot(rayDirection, texelDirection)), DDGIVolumes[0].depthSharpness);
 #endif
-        // if (weight >= 1e-6) {
+        if (weight >= 1e-6) {
             // Storing the sum of the weights in alpha temporarily
 #ifdef OUTPUT_IRRADIANCE
             result += float4(rayHitRadiance_ * weight, weight);
@@ -100,8 +100,7 @@ void main(uint3 id : SV_DispatchThreadID)
                 0.0,
                 weight);
 #endif
-        // }
-		
+        }
 	}
     
     float epsilon = 1e-9 * float(RAYS_PER_PROBE);

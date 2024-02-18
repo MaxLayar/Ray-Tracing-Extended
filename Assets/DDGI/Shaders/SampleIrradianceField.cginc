@@ -207,13 +207,7 @@ float4 sampleOneDDGIVolume
             probeIrradiance = sqrt(probeIrradiance);
         }
 
-        if (DEBUG_VISUALIZATION_MODE == 1)
-        {
-            int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
-            probeIrradiance = (p == debugProbeIndex) ? float3(1, 1, 1) : float3(0, 0, 0);
-        }
-
-        if (SHOW_CHEBYSHEV_WEIGHTS == 1)
+        if (DEBUG_VISUALIZATION_MODE == 1 || SHOW_CHEBYSHEV_WEIGHTS == 1)
         {
             int p = gridCoordToProbeIndex(ddgiVolume, probeGridCoord);
             probeIrradiance = (p == debugProbeIndex) ? float3(1, 1, 1) : float3(0, 0, 0);

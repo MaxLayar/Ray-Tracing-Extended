@@ -98,13 +98,17 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
         return WorldPos.xyz / WorldPos.w;
     }
 
+    #if defined(SHOW_PROBES)
     float4 ProbeColor(uint probeIndex, float3 normal)
     {
         int3 probeGridCoord = probeIndexToGridCoord(DDGIVolumes[0], probeIndex);
-        float2 texCoord = probeTextureCoordFromDirection(normal, probeGridCoord, true, DDGIVolumes[0]);
+        float2 texCoord = probeTextureCoordFromDirection(normal, probeGridCoord, debugIrradiance == 1, DDGIVolumes[0]);
 
-        return Load(irradianceTexture, texCoord, irradianceTextureSize);
+        if (debugIrradiance == 1)
+            return Load(irradianceTexture, texCoord, irradianceTextureSize);
+        return Load(visibilityTexture, texCoord, visibilityTextureSize);
     }
+    #endif
 
     ENDHLSL
     Properties

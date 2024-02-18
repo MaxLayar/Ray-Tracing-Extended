@@ -128,9 +128,11 @@ HitInfo RaySphere(Ray ray, float3 sphereCentre, float sphereRadius)
     }
     return hitInfo;
 }
+
 #if defined(SHOW_PROBES)
 StructuredBuffer<float3> ProbesPositions;
 float DebugProbesRadius;
+bool debugIrradiance;
 #endif
 
 // Find the first point that the given ray collides with, and return hit info
@@ -154,9 +156,12 @@ bool CalculateRayCollision(in Ray ray, out HitInfo info)
             RayTracingMaterial m = (RayTracingMaterial) 0;
 
             int3 probeGridCoord = probeIndexToGridCoord(DDGIVolumes[0], i);
-            float2 texCoord = probeTextureCoordFromDirection(hitInfo.normal, probeGridCoord, true, DDGIVolumes[0]);
+            float2 texCoord = probeTextureCoordFromDirection(hitInfo.normal, probeGridCoord, debugIrradiance, DDGIVolumes[0]);
 
-            m.colour = Load(irradianceTexture, texCoord, irradianceTextureSize);
+            if (debugIrradiance)
+                m.colour = Load(irradianceTexture, texCoord, irradianceTextureSize);
+            else
+                m.colour = Load(visibilityTexture, texCoord, visibilityTextureSize);
 
             closestHit.material = m;
         }

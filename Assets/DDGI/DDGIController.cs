@@ -675,6 +675,7 @@ public class DDGIController : MonoBehaviour
 				blitMaterial.EnableKeyword("SHOW_PROBES");
 				blitMaterial.SetBuffer("ProbesPositions", probesPositionsBuffer);
 				blitMaterial.SetFloat("DebugProbesRadius", debugShowProbesRadius);
+				blitMaterial.SetInt("debugIrradiance", outputMode == DebugOutputMode.Irradiance ? 1 : 0);
 			}
 			else
 				blitMaterial.DisableKeyword("SHOW_PROBES");
@@ -710,6 +711,7 @@ public class DDGIController : MonoBehaviour
 				raytracedDDGIShader.EnableKeyword("SHOW_PROBES");
 				raytracedDDGIShader.SetBuffer(0, "ProbesPositions", probesPositionsBuffer);
 				raytracedDDGIShader.SetFloat("DebugProbesRadius", debugShowProbesRadius);
+				raytracedDDGIShader.SetBool("debugIrradiance", outputMode == DebugOutputMode.Irradiance);
 			}
 			else
 				raytracedDDGIShader.DisableKeyword("SHOW_PROBES");
