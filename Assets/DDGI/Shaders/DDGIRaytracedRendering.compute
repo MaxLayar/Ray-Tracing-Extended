@@ -42,11 +42,16 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     ray.tMax = 1000.0;
 
     HitInfo info;
-    if (TraceRay(ray, info))
+    if (CalculateRayCollision(ray, info, true))
     {
-        float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
+        if (!info.isProbe)
+        {
+            float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
         
-        Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true, debugDisableBackface, debugDisableChebyshev);
+            Result[id.xy] = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, true, debugDisableBackface, debugDisableChebyshev);
+        }
+        else
+            Result[id.xy] = info.material.colour;
     }
     else
         Result[id.xy] = float4(0,0,.1,1);

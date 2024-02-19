@@ -49,16 +49,16 @@ void main(uint3 id : SV_DispatchThreadID)
 
     HitInfo info;
     float4 allLight = float4(0,0,0,0);
-    if (TraceRay(ray, info))
+    if (CalculateRayCollision(ray, info))
     {
         float3 viewVec = normalize(_WorldSpaceCameraPos - info.hitPoint);
         allLight = ComputeShadingAt(info, viewVec, sunDirection, sunColor, 1000.0, false, debugDisableBackface, debugDisableChebyshev);
     }
     
     Write(rayDirections, texelPos, surfelSize, float4(ray.direction, info.dst));
-    Write(rayHitLocations, texelPos, surfelSize, float4(info.hitPoint, info.dst) * info.didHit);
+    Write(rayHitLocations, texelPos, surfelSize, float4(info.hitPoint, info.dst));
     Write(rayHitRadiance, texelPos, surfelSize, allLight);
-    Write(rayHitNormals, texelPos, surfelSize, float4(info.normal,0) * info.didHit);
+    Write(rayHitNormals, texelPos, surfelSize, float4(info.normal, info.dst));
     Write(rayOrigins, texelPos, surfelSize, float4(ray.origin, info.dst));
 
     #ifdef DEBUG_MODE

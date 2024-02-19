@@ -24,6 +24,7 @@ struct HitInfo
     float3 hitPoint;
     float3 normal;
     RayTracingMaterial material;
+    bool isProbe;
 };
 
 struct Triangle
@@ -96,6 +97,7 @@ HitInfo RayTriangle(Ray ray, Triangle tri)
     hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
     hitInfo.hitPoint = ray.origin + ray.direction * dst;
     hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+    hitInfo.isProbe = false;
     hitInfo.dst = dst;
     return hitInfo;
 }
@@ -124,6 +126,7 @@ HitInfo RaySphere(Ray ray, float3 sphereCentre, float sphereRadius)
             hitInfo.dst = dst;
             hitInfo.hitPoint = ray.origin + ray.direction * dst;
             hitInfo.normal = normalize(hitInfo.hitPoint - sphereCentre);
+            hitInfo.isProbe = true;
         }
     }
     return hitInfo;
@@ -136,34 +139,37 @@ bool debugIrradiance;
 #endif
 
 // Find the first point that the given ray collides with, and return hit info
-bool CalculateRayCollision(in Ray ray, out HitInfo info)
+bool CalculateRayCollision(in Ray ray, out HitInfo info, bool detectProbes = false)
 {
     HitInfo closestHit = (HitInfo)0;
     // We haven't hit anything yet, so 'closest' hit is infinitely far away
     closestHit.dst = 1.#INF;
 
     #if defined(SHOW_PROBES)
-    int numProbes = DDGIVolumes[0].probeCounts.x * DDGIVolumes[0].probeCounts.y * DDGIVolumes[0].probeCounts.z;
-    // Raycast against all spheres and keep info about the closest hit
-    for (int i = 0; i < numProbes; i ++)
+    if (detectProbes)
     {
-        HitInfo hitInfo = RaySphere(ray, ProbesPositions[i], DebugProbesRadius);
-
-        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        int numProbes = DDGIVolumes[0].probeCounts.x * DDGIVolumes[0].probeCounts.y * DDGIVolumes[0].probeCounts.z;
+        // Raycast against all spheres and keep info about the closest hit
+        for (int i = 0; i < numProbes; i ++)
         {
-            closestHit = hitInfo;
+            HitInfo hitInfo = RaySphere(ray, ProbesPositions[i], DebugProbesRadius);
+
+            if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+            {
+                closestHit = hitInfo;
             
-            RayTracingMaterial m = (RayTracingMaterial) 0;
+                RayTracingMaterial m = (RayTracingMaterial) 0;
 
-            int3 probeGridCoord = probeIndexToGridCoord(DDGIVolumes[0], i);
-            float2 texCoord = probeTextureCoordFromDirection(hitInfo.normal, probeGridCoord, debugIrradiance, DDGIVolumes[0]);
+                int3 probeGridCoord = probeIndexToGridCoord(DDGIVolumes[0], i);
+                float2 texCoord = probeTextureCoordFromDirection(hitInfo.normal, probeGridCoord, debugIrradiance, DDGIVolumes[0]);
 
-            if (debugIrradiance)
-                m.colour = Load(irradianceTexture, texCoord, irradianceTextureSize);
-            else
-                m.colour = Load(visibilityTexture, texCoord, visibilityTextureSize);
+                if (debugIrradiance)
+                    m.colour = Load(irradianceTexture, texCoord, irradianceTextureSize);
+                else
+                    m.colour = Load(visibilityTexture, texCoord, visibilityTextureSize);
 
-            closestHit.material = m;
+                closestHit.material = m;
+            }
         }
     }
     #endif
@@ -193,11 +199,6 @@ bool CalculateRayCollision(in Ray ray, out HitInfo info)
     return info.dst < ray.tMax;
 }
 
-bool TraceRay(in Ray ray, out HitInfo info)
-{
-    return CalculateRayCollision(ray, info);
-}
-
 float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float4 sunColor, float maxDistance, bool useIndirect, bool debugDisableBackface, bool debugDisableChebyshev)
 {
     float4 indirectL = float4(sampleIrradiance(DDGIVolumes, info.hitPoint, info.normal, info.normal, _WorldSpaceCameraPos, debugDisableBackface, debugDisableChebyshev, -1), 1);
@@ -208,7 +209,7 @@ float4 ComputeShadingAt(HitInfo info, float3 viewVec, float3 sunDirection, float
     shadowRay.origin = info.hitPoint + (info.normal * DDGIVolumes[0].selfShadowBias);
     shadowRay.tMin = 0.01;
     shadowRay.tMax = maxDistance;
-    int lit = !TraceRay(shadowRay, shadowHit); //sHit ? 0 : 1;
+    int lit = !CalculateRayCollision(shadowRay, shadowHit); //sHit ? 0 : 1;
 
     SurfaceOutputStandard s;
     s.Albedo = info.material.colour.rgb; // base (diffuse or specular) color
