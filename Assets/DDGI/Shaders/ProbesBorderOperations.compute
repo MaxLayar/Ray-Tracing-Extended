@@ -29,7 +29,7 @@ uint mirrored(uint pos)
     uint gap = 2 + PROBE_SIDE_LENGTH;
     uint probe = pos / gap;
     uint startPoint = probe * gap;
-    float midPoint = startPoint + (PROBE_SIDE_LENGTH-1) / 2.0;
+    float midPoint = startPoint + (gap-1) * .5;
     float dst = midPoint - pos;
     return pos + dst * 2;
 }
@@ -46,9 +46,9 @@ XXX|XXX <-- on this half?
 */
 int leftOrRight(int pos)
 {
-    uint probeWithBorderSize = 2 + PROBE_SIDE_LENGTH;
-    uint posInProbe = pos % probeWithBorderSize;
-    uint middle = probeWithBorderSize / 2;
+    uint gap = 2 + PROBE_SIDE_LENGTH;
+    uint posInProbe = pos % gap;
+    uint middle = gap * .5;
     return posInProbe < middle ? 1 : -1;
 }
 
@@ -111,18 +111,20 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
             int pos = mirrored(texelPos.y);
             int toAdd = leftOrRight(texelPos.x);
             float4 texelToCopy = Load(probesBuffer, int2(texelPos.x+toAdd,pos), probesBufferSize);
+
             Write(probesBuffer, texelPos, probesBufferSize, texelToCopy);
             #ifdef DEBUG_MODE
             debugTex[texelPos] = texelToCopy;
             #endif
             return;
         }
-
+        
         if(isAtBorderY)
         {
             int pos = mirrored(texelPos.x);
             int toAdd = leftOrRight(texelPos.y);
             float4 texelToCopy = Load(probesBuffer, int2(pos, texelPos.y+toAdd), probesBufferSize);
+
             Write(probesBuffer, texelPos, probesBufferSize, texelToCopy);
             #ifdef DEBUG_MODE
             debugTex[texelPos] = texelToCopy;
