@@ -154,8 +154,8 @@ public class DDGIController : MonoBehaviour
 
 			PrepareScene(computeRays);
 			ComputeProbesRays();
-			UpdateProbes(false, DebugOutputMode.Visibility);
-			UpdateProbes(true, DebugOutputMode.Irradiance);
+			UpdateProbes(DebugOutputMode.Visibility);
+			UpdateProbes(DebugOutputMode.Irradiance);
 
 			foreach(DDGIVolume ddgiVolume in ddgiVolumes)
 			{
@@ -337,8 +337,9 @@ public class DDGIController : MonoBehaviour
 		shader.SetVector("probeOffsetsImageSize", new Vector4(visW, visH));
 	}
 
-	public void UpdateProbes(bool isOutputIrradiance, DebugOutputMode debugOutputMode)
+	public void UpdateProbes(DebugOutputMode debugOutputMode)
 	{
+		bool isOutputIrradiance = debugOutputMode == DebugOutputMode.Irradiance;
 		DDGIVolume copy = ddgiVolumes[0];
 		
 		computeIrradiance.SetInt("RAYS_PER_PROBE", numRaysPerProbe);

@@ -46,9 +46,9 @@ public class DDGIControllerEditor : Editor
     {
         base.OnInspectorGUI();
 
-        if (GUILayout.Button("Reset Buffers"))
+        if (GUILayout.Button("Save Debug Buffer"))
         {
-            //ddgiController.ResetBuffers();
+            SaveRenderTextureToFile.SaveRTToFile(ddgiController.debugTexture);
         }
     }
 }
