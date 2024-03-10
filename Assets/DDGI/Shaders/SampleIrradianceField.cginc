@@ -154,7 +154,7 @@ float4 sampleOneDDGIVolume
         if (! debugDisableChebyshev) {
             float2 texCoord = probeTextureCoordFromDirection(probeToBiasedPointDirection, probeGridCoord, false, ddgiVolume);
 
-            float2 temp = Load(visibilityTexture, texCoord, visibilityTextureSize).xy;
+            float2 temp = LoadBilinear(visibilityTexture, texCoord, visibilityTextureSize).xy;
 
             float meanDistanceToOccluder = temp.x;
             float variance = abs(sqrt(temp.x) - temp.y);
@@ -196,7 +196,7 @@ float4 sampleOneDDGIVolume
       
 		weight = weight * trilinear;
                
-        float3 probeIrradiance = Load(irradianceTexture, texCoord, irradianceTextureSize).rgb;
+        float3 probeIrradiance = LoadBilinear(irradianceTexture, texCoord, irradianceTextureSize).rgb;
 
         // Decode the tone curve, but leave a gamma = 2 curve (=sqrt here) to approximate sRGB blending for the trilinear
         float comp = ddgiVolume.irradianceGamma * 0.5;

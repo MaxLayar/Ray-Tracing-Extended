@@ -164,9 +164,9 @@ bool CalculateRayCollision(in Ray ray, out HitInfo info, bool detectProbes = fal
                 float2 texCoord = probeTextureCoordFromDirection(hitInfo.normal, probeGridCoord, debugIrradiance, DDGIVolumes[0]);
 
                 if (debugIrradiance)
-                    m.colour = Load(irradianceTexture, texCoord, irradianceTextureSize);
+                    m.colour = LoadBilinear(irradianceTexture, texCoord, irradianceTextureSize);
                 else
-                    m.colour = Load(visibilityTexture, texCoord, visibilityTextureSize);
+                    m.colour = LoadBilinear(visibilityTexture, texCoord, visibilityTextureSize);
 
                 closestHit.material = m;
             }

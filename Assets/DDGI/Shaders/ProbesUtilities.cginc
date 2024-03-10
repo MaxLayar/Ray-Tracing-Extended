@@ -178,16 +178,20 @@ float2 probeTextureCoordFromDirection
    (float3             dir, 
     int3           probeGridCoord,
     const in bool       useIrradiance,
-    DDGIVolume          ddgiVolume) {
+    DDGIVolume          ddgiVolume) 
+    {
     int probeSideLength = useIrradiance ? ddgiVolume.irradianceProbeSideLength : ddgiVolume.visibilityProbeSideLength;
 
     float2 signedOct = octEncode(dir);
     float2 unsignedOct = (signedOct + 1.0f) * 0.5f;
+    float2 octCoordNormalizedToTextureDimensions = (unsignedOct * (float)probeSideLength);
+    
     int probeWithBorderSide = probeSideLength + 2;
 
-    float2 coordInProbe = unsignedOct * probeSideLength + float2(1,1);
-    uint2 probeTexCoordStart = uint2((probeGridCoord.x + probeGridCoord.y * ddgiVolume.probeCounts.x) * probeWithBorderSide,
-        probeGridCoord.z * probeWithBorderSide);
-    
-    return probeTexCoordStart + (uint2) coordInProbe;
+    float2 probeBottomLeftPosition = float2((probeGridCoord.x + probeGridCoord.y * ddgiVolume.probeCounts.x) * probeWithBorderSide,
+        probeGridCoord.z * probeWithBorderSide) + float2(1,1);
+
+    float2 normalizedProbeBottomLeftPosition = float2(probeBottomLeftPosition);
+
+    return float2(normalizedProbeBottomLeftPosition + octCoordNormalizedToTextureDimensions);
 }

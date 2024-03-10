@@ -62,16 +62,16 @@ void main(uint3 id : SV_DispatchThreadID)
 
     // For each ray
 	for (int r = 0; r < RAYS_PER_PROBE; ++r) {
-		uint2 C = uint2(r, relativeProbeID);
-		float3 rayDirection    = Load(rayDirections, C, surfelsTextureSize).xyz;
+		uint2 C = float2(r, relativeProbeID);
+		float3 rayDirection    = LoadBilinear(rayDirections, C, surfelsTextureSize).xyz;
 #ifdef OUTPUT_IRRADIANCE
-        float3  rayHitRadiance_  = Load(rayHitRadiance, C, surfelsTextureSize).xyz * 0.95; // Energy is conserved in sampleIrradiance field. Is it needed here?
+        float3  rayHitRadiance_  = LoadBilinear(rayHitRadiance, C, surfelsTextureSize).xyz * 0.95; // Energy is conserved in sampleIrradiance field. Is it needed here?
 #else
-		float3  rayHitLocation  = Load(rayHitLocations, C, surfelsTextureSize).xyz;
+		float3  rayHitLocation  = LoadBilinear(rayHitLocations, C, surfelsTextureSize).xyz;
 
-        float3 probeLocation = Load(rayOrigins, C, surfelsTextureSize).xyz;
+        float3 probeLocation = LoadBilinear(rayOrigins, C, surfelsTextureSize).xyz;
         // Will be zero on a miss
-		float3 rayHitNormal    = Load(rayHitNormals, C, surfelsTextureSize).xyz;
+		float3 rayHitNormal    = LoadBilinear(rayHitNormals, C, surfelsTextureSize).xyz;
 
         rayHitLocation += rayHitNormal * 0.08f;
 
@@ -112,8 +112,12 @@ void main(uint3 id : SV_DispatchThreadID)
     result.xyz = pow(abs(result.xyz), float3(1,1,1) * DDGIVolumes[0].invIrradianceGamma);
 #endif
 
+    float2 debugOctCoord = normalizedOctCoord(texelPos, PROBE_SIDE_LENGTH);
+    float3 debugResult = 0.5f * (float3(debugOctCoord + float2(1,1), 0));
+
     float4 val = lerp(result, old, DDGIVolumes[0].hysteresis);
-    Write(outputBuffer, texelPos, outputBufferSize, val);
+    Write(outputBuffer, texelPos, outputBufferSize, //float4(debugResult, 1));
+        val);
 
     #ifdef DEBUG_MODE
     debugTex[texelPos] = val;

@@ -105,8 +105,8 @@ Shader "DDGI/ScreenSpaceApplyDDGI"
         float2 texCoord = probeTextureCoordFromDirection(normal, probeGridCoord, debugIrradiance == 1, DDGIVolumes[0]);
 
         if (debugIrradiance == 1)
-            return Load(irradianceTexture, texCoord, irradianceTextureSize);
-        return Load(visibilityTexture, texCoord, visibilityTextureSize);
+            return LoadBilinear(irradianceTexture, texCoord, irradianceTextureSize);
+        return LoadBilinear(visibilityTexture, texCoord, visibilityTextureSize);
     }
     #endif
 
