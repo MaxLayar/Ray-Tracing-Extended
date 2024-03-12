@@ -14,9 +14,6 @@ int RAYS_PER_PROBE;
 RWTexture2D<float4> debugTex;
 #endif
 
-RWStructuredBuffer<float4> outputBuffer;
-uint2 outputBufferSize;
-
 #ifdef OUTPUT_IRRADIANCE
 RWStructuredBuffer<float4> rayHitRadiance;
 #else
@@ -32,26 +29,35 @@ float square(float f)
     return f * f;
 }
 
+uint2 GetBufferDimensions(int probeSideLength, uint3 probeCounts)
+{
+    int sizeW = (probeSideLength + 2) * probeCounts.x * probeCounts.y;
+    int sizeH = (probeSideLength + 2) * probeCounts.z;
+
+    return uint2(sizeW, sizeH);
+}
+
 // This is basically from the supplemental material from the paper 
 // Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID)
 {
+    uint2 texelPos = uint2(id.x, id.y);
 #ifdef OUTPUT_IRRADIANCE
     PROBE_SIDE_LENGTH = DDGIVolumes[0].irradianceProbeSideLength;
 #else
     PROBE_SIDE_LENGTH = DDGIVolumes[0].visibilityProbeSideLength;
 #endif
-    
-    uint2 texelPos = uint2(id.x, id.y);
+
+    uint2 textureSize = GetBufferDimensions(PROBE_SIDE_LENGTH, DDGIVolumes[0].probeCounts);
+
+    if (texelPos.x >= textureSize.x -1 || texelPos.y >= textureSize.y -1 || texelPos.x < 1 || texelPos.y < 1) return;
+    int relativeProbeID = texelToIndex(texelPos, textureSize.x);
 
     float4 result = float4(0,0,0,0);
 
-    if(texelPos.x >= outputBufferSize.x -1 || texelPos.y >= outputBufferSize.y -1 || texelPos.x < 1 || texelPos.y < 1) return;
-    int relativeProbeID = texelToIndex(texelPos, outputBufferSize.x);
-
     if (relativeProbeID == -1) {
-        Write(outputBuffer, texelPos, outputBufferSize, result);
+        Result[texelPos] = result;
         #ifdef DEBUG_MODE
         debugTex[texelPos] = result;
         #endif
@@ -113,18 +119,22 @@ void main(uint3 id : SV_DispatchThreadID)
     float epsilon = 1e-9 * float(RAYS_PER_PROBE);
     result.xyz *= 1.0 / max(result.w, epsilon);
 
-    float4 old = Load(outputBuffer, texelPos, outputBufferSize);
-    
-#ifdef OUTPUT_IRRADIANCE
+    #ifdef OUTPUT_IRRADIANCE
     result.xyz = pow(abs(result.xyz), float3(1,1,1) * DDGIVolumes[0].invIrradianceGamma);
-#endif
+    #endif
 
+#ifdef OUTPUT_IRRADIANCE
+    float4 old = irradianceTexture.SampleLevel(sampler_irradianceTexture, texelPos * DDGIVolumes[0].invIrradianceTextureSize, 0);
+#else
+    float4 old = visibilityTexture.SampleLevel(sampler_visibilityTexture, texelPos * DDGIVolumes[0].invVisibilityTextureSize, 0);
+#endif
+    
     float2 debugOctCoord = normalizedOctCoord(relativeTexelCoord, PROBE_SIDE_LENGTH);
     float3 debugResult = 0.5f * (float3(debugOctCoord + float2(1,1), 0));
 
     float4 val = lerp(result, old, DDGIVolumes[0].hysteresis);
-    Write(outputBuffer, texelPos, outputBufferSize, //float4(debugResult, 1));
-        val);
+    Result[texelPos] = //float4(debugResult, 1);
+        val;
 
     #ifdef DEBUG_MODE
     debugTex[texelPos] = val;

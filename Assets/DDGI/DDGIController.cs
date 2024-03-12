@@ -3,6 +3,8 @@ using System.Linq;
 
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
+using UnityEngine.Rendering;
 
 [ExecuteAlways, ImageEffectAllowedInSceneView]
 public class DDGIController : MonoBehaviour
@@ -54,8 +56,8 @@ public class DDGIController : MonoBehaviour
 		public float					energyConservation;
 		public float 					maxDistance;
 	};
-	[SerializeField] ComputeBuffer irradianceTexture;
-	[SerializeField] ComputeBuffer visibilityTexture;
+	[SerializeField] RenderTexture irradianceTexture;
+	[SerializeField] RenderTexture visibilityTexture;
 	[SerializeField] ComputeBuffer probeOffsetsTexture;
 	[SerializeField] ComputeBuffer probeOffsetsImage;
 
@@ -127,50 +129,50 @@ public class DDGIController : MonoBehaviour
 
 	void Update()
 	{
-		if (isRealtimeRaytracing)
+		if (!isRealtimeRaytracing)
+			return;
+
+		if (!isWriteOnesDone || debugTextureAtPass >= DDGIPass.Borders)
 		{
-			if (!isWriteOnesDone || debugTextureAtPass is DDGIPass.Borders)
-			{
-				foreach(DDGIVolume ddgiVolume in ddgiVolumes)
-				{
-					visibilityTexture?  .Release();
-					irradianceTexture?  .Release();
-					probeOffsetsTexture?.Release();
-					probeOffsetsImage?  .Release();
-
-					(int w, int h) v = GetBufferDimensions(ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts);
-					visibilityTexture = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
-					(int w, int h) i = GetBufferDimensions(ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts);
-					irradianceTexture = new ComputeBuffer(i.w*i.h,GetStride<Vector4>(), ComputeBufferType.Structured);
-
-					probeOffsetsTexture = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
-					probeOffsetsImage = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
-
-					UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 0, DebugOutputMode.Visibility); //set ones
-					UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 0, DebugOutputMode.Irradiance); //set ones
-				}
-				isWriteOnesDone = true;
-			}
-
-			PrepareScene(computeRays);
-			ComputeProbesRays();
-			UpdateProbes(DebugOutputMode.Visibility);
-			UpdateProbes(DebugOutputMode.Irradiance);
-
 			foreach(DDGIVolume ddgiVolume in ddgiVolumes)
 			{
-				UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 1, DebugOutputMode.Visibility); //copy borders
-				UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 1, DebugOutputMode.Irradiance); //copy borders
+				(int w, int h) v = GetBufferDimensions(ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts);
+				(int w, int h) i = GetBufferDimensions(ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts);
+
+				RefreshBufferIfNeeded(ref visibilityTexture, "visibilityTexture", v.w, v.h);
+				RefreshBufferIfNeeded(ref irradianceTexture, "irradianceTexture", i.w, i.h);
+
+				probeOffsetsTexture?.Release();
+				probeOffsetsImage?  .Release();
+
+				probeOffsetsTexture = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
+				probeOffsetsImage = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
+
+				UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 0, DebugOutputMode.Visibility); //set ones
+				UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 0, DebugOutputMode.Irradiance); //set ones
 			}
+			isWriteOnesDone = true;
+		}
+
+		PrepareScene(computeRays);
+		ComputeProbesRays();
+		UpdateProbes(false, DebugOutputMode.Visibility);
+		UpdateProbes(true, DebugOutputMode.Irradiance);
+
+		foreach (DDGIVolume ddgiVolume in ddgiVolumes)
+		{
+			UpdateProbesBorders(visibilityTexture, ddgiVolume.visibilityProbeSideLength, ddgiVolume.probeCounts, 1, DebugOutputMode.Visibility); //copy borders
+			UpdateProbesBorders(irradianceTexture, ddgiVolume.irradianceProbeSideLength, ddgiVolume.probeCounts, 1, DebugOutputMode.Irradiance); //copy borders
 		}
 	}
 
-	void UpdateProbesBorders(ComputeBuffer probesBuffer, int probeSideLength, Vector3Int probeCounts, int kernelIndex, DebugOutputMode debugOutputMode)
+	void UpdateProbesBorders(RenderTexture probesBuffer, int probeSideLength, Vector3Int probeCounts, int kernelIndex, DebugOutputMode debugOutputMode)
 	{
 		(int threadGroupsX, int threadGroupsY) = GetBufferDimensions(probeSideLength, probeCounts);
 
-		computeBorders.SetBuffer(kernelIndex, "probesBuffer", probesBuffer);
-		computeBorders.SetVector("probesBufferSize", new Vector4(threadGroupsX, threadGroupsY));
+		computeBorders.SetTexture(kernelIndex, "probesBuffer", probesBuffer);
+		computeBorders.SetVector("probesBufferSize", new Vector4(probesBuffer.width, probesBuffer.height));
+		computeBorders.SetTexture(kernelIndex, "Result", probesBuffer);
 		computeBorders.SetFloat("PROBE_SIDE_LENGTH", probeSideLength);
 
 		CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
@@ -178,8 +180,8 @@ public class DDGIController : MonoBehaviour
 
 		if(debugTexture &&
 		outputMode == debugOutputMode &&
-		((debugTextureAtPass is DDGIPass.Borders && kernelIndex == 0) ||
-		(debugTextureAtPass is DDGIPass.Finalize && kernelIndex == 1)))
+		((debugTextureAtPass >= DDGIPass.Borders && kernelIndex == 0) ||
+		(debugTextureAtPass >= DDGIPass.Finalize && kernelIndex == 1)))
 		{
 			RefreshBufferIfNeeded(ref debugTexture, $"Debug {debugTextureAtPass} Pass", threadGroupsX, threadGroupsY);
 			computeBorders.SetTexture(kernelIndex, "debugTex", debugTexture);			
@@ -193,8 +195,8 @@ public class DDGIController : MonoBehaviour
 
 	(int,int) GetBufferDimensions(int probeSideLength, Vector3Int probeCounts)
 	{
-		int sizeW = (probeSideLength + 2) /* 1px Border around probe left and right */ * probeCounts.x * probeCounts.y;// + 2; /* 1px Border around whole texture left and right*/
-		int sizeH = (probeSideLength + 2) * probeCounts.z;// + 2;
+		int sizeW = (probeSideLength + 2) * probeCounts.x * probeCounts.y;
+		int sizeH = (probeSideLength + 2) * probeCounts.z;
 
 		return (sizeW, sizeH);
 	}
@@ -254,10 +256,7 @@ public class DDGIController : MonoBehaviour
 		CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes);
 		computeRays.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
-		(int irrW, int irrH) = GetBufferDimensions(copy.irradianceProbeSideLength, copy.probeCounts);
-		(int visW, int visH) = GetBufferDimensions(copy.visibilityProbeSideLength, copy.probeCounts);
-
-		PrepareDDGIVolumeBuffers(computeRays, irrW, irrH, visW, visH);
+		PrepareDDGIVolumeBuffers(computeRays);
 
 		computeRays.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel); //probeOffsetsTexture->format()->redBits
 
@@ -307,7 +306,7 @@ public class DDGIController : MonoBehaviour
 		computeRays.SetBool("debugDisableChebyshev", isDebugDisableChebyshev);
 
 		//DEBUG
-		if(debugTexture && debugTextureAtPass is DDGIPass.Rays)
+		if(debugTexture && debugTextureAtPass >= DDGIPass.Rays)
 		{
 			RefreshBufferIfNeeded(ref debugTexture, "Debug Rays Pass", surfelWidth, surfelHeight);
 			computeRays.SetTexture(0, "debugTex", debugTexture);
@@ -322,24 +321,20 @@ public class DDGIController : MonoBehaviour
         computeRays.Dispatch(0, threadGroupsX, threadGroupsY, 1);
 	}
 
-	private void PrepareDDGIVolumeBuffers(ComputeShader shader, int irrW, int irrH, int visW, int visH)
+	private void PrepareDDGIVolumeBuffers(ComputeShader shader)
 	{
-		shader.SetBuffer(0, "irradianceTexture", irradianceTexture);
-		shader.SetVector("irradianceTextureSize", new Vector4(irrW, irrH));
-
-		shader.SetBuffer(0, "visibilityTexture", visibilityTexture);
-		shader.SetVector("visibilityTextureSize", new Vector4(visW, visH));
+		shader.SetTexture(0, "irradianceTexture", irradianceTexture);
+		shader.SetTexture(0, "visibilityTexture", visibilityTexture);
 
 		shader.SetBuffer(0, "probeOffsetsTexture", probeOffsetsTexture);
-		shader.SetVector("probeOffsetsTextureSize", new Vector4(visW, visH));
+		shader.SetVector("probeOffsetsTextureSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
 
 		shader.SetBuffer(0, "probeOffsetsImage", probeOffsetsImage);
-		shader.SetVector("probeOffsetsImageSize", new Vector4(visW, visH));
+		shader.SetVector("probeOffsetsImageSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
 	}
 
-	public void UpdateProbes(DebugOutputMode debugOutputMode)
+	public void UpdateProbes(bool isOutputIrradiance, DebugOutputMode debugOutputMode)
 	{
-		bool isOutputIrradiance = debugOutputMode == DebugOutputMode.Irradiance;
 		DDGIVolume copy = ddgiVolumes[0];
 		
 		computeIrradiance.SetInt("RAYS_PER_PROBE", numRaysPerProbe);
@@ -359,19 +354,21 @@ public class DDGIController : MonoBehaviour
 
 		computeIrradiance.SetBuffer(0, "rayDirections", rayDirectionsBuffer);
 
-		(int w, int h) bufferSize = GetBufferDimensions(isOutputIrradiance ? copy.irradianceProbeSideLength : copy.visibilityProbeSideLength, copy.probeCounts);
-		computeIrradiance.SetVector("outputBufferSize", new Vector4(bufferSize.w, bufferSize.h));
-		computeIrradiance.SetBuffer(0, "outputBuffer", isOutputIrradiance ? irradianceTexture : visibilityTexture);
+		PrepareDDGIVolumeBuffers(computeIrradiance);
+
+		computeIrradiance.SetTexture(0, "Result", isOutputIrradiance ? irradianceTexture : visibilityTexture);
 
 		int surfelWidth = numRaysPerProbe;
 	    int surfelHeight = Mathf.Max(copy.probeCounts.x * copy.probeCounts.y * copy.probeCounts.z, 1);
 		computeIrradiance.SetVector("surfelsTextureSize", new Vector4(surfelWidth, surfelHeight));
 
-		CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
+		//CreateStructuredBuffer(ref ddgiVolumesBuffer, ddgiVolumes); // useless ?
 		computeIrradiance.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
+		(int w, int h) bufferSize = GetBufferDimensions(isOutputIrradiance ? copy.irradianceProbeSideLength : copy.visibilityProbeSideLength, copy.probeCounts);
+
 		//DEBUG
-		if(debugTexture && outputMode == debugOutputMode && debugTextureAtPass is DDGIPass.Update)
+		if (debugTexture && outputMode == debugOutputMode && debugTextureAtPass >= DDGIPass.Update)
 		{
 			RefreshBufferIfNeeded(ref debugTexture, "Debug Update Pass", bufferSize.w, bufferSize.h);
 			computeIrradiance.SetTexture(0, "debugTex", debugTexture);
@@ -648,18 +645,15 @@ public class DDGIController : MonoBehaviour
 
 			blitMaterial.SetBuffer("DDGIVolumes", ddgiVolumesBuffer);
 
-			(int w, int h) irrSize = GetBufferDimensions(ddgiVolumes[0].irradianceProbeSideLength, ddgiVolumes[0].probeCounts);
-			(int w, int h) visSize = GetBufferDimensions(ddgiVolumes[0].visibilityProbeSideLength, ddgiVolumes[0].probeCounts);
-
-			blitMaterial.SetBuffer("irradianceTexture", irradianceTexture);
-			blitMaterial.SetVector("irradianceTextureSize", new Vector4(irrSize.w, irrSize.h));
-			blitMaterial.SetBuffer("visibilityTexture", visibilityTexture);
-			blitMaterial.SetVector("visibilityTextureSize", new Vector4(visSize.w, visSize.h));
+			blitMaterial.SetTexture("irradianceTexture", irradianceTexture);
+			blitMaterial.SetVector("irradianceTextureSize", new Vector4(irradianceTexture.width, irradianceTexture.height));
+			blitMaterial.SetTexture("visibilityTexture", visibilityTexture);
+			blitMaterial.SetVector("visibilityTextureSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
 
 			blitMaterial.SetBuffer("probeOffsetsTexture", probeOffsetsTexture);
-			blitMaterial.SetVector("probeOffsetsTextureSize", new Vector4(visSize.w, visSize.h));
+			blitMaterial.SetVector("probeOffsetsTextureSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
 			blitMaterial.SetBuffer("probeOffsetsImage", probeOffsetsImage);
-			blitMaterial.SetVector("probeOffsetsImageSize", new Vector4(visSize.w, visSize.h));
+			blitMaterial.SetVector("probeOffsetsImageSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
 
 			blitMaterial.SetInt("OFFSET_BITS_PER_CHANNEL", offsetBitsPerChannel);
 
@@ -689,10 +683,7 @@ public class DDGIController : MonoBehaviour
 
 			raytracedDDGIShader.SetBuffer(0, "DDGIVolumes", ddgiVolumesBuffer);
 
-			(int irrW, int irrH) = GetBufferDimensions(ddgiVolumes[0].irradianceProbeSideLength, ddgiVolumes[0].probeCounts);
-			(int visW, int visH) = GetBufferDimensions(ddgiVolumes[0].visibilityProbeSideLength, ddgiVolumes[0].probeCounts);
-
-			PrepareDDGIVolumeBuffers(raytracedDDGIShader, irrW, irrH, visW, visH);
+			PrepareDDGIVolumeBuffers(raytracedDDGIShader);
 
 			// Set camera parameters
 			float planeHeight = cam.farClipPlane * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * 2;
@@ -788,11 +779,15 @@ public class DDGIController : MonoBehaviour
 	{
 		if (!buffer)
 		{
-            buffer = new RenderTexture(width, heigh, 16, UnityEngine.Experimental.Rendering.DefaultFormat.HDR)
+            buffer = new RenderTexture(width, heigh, 1)
 			{
+                name = bufferName,
                 enableRandomWrite = true,
-                name = bufferName
+				format = RenderTextureFormat.DefaultHDR,
+				graphicsFormat = GraphicsFormat.R32G32B32A32_SFloat,
+
             };
+			buffer.Create();
         }
 
 		if (buffer.width != width || buffer.height != heigh)
@@ -801,6 +796,11 @@ public class DDGIController : MonoBehaviour
 			buffer.width = width;
 			buffer.height = heigh;
 		}
+
+		// RenderTexture rt = RenderTexture.active;
+		// RenderTexture.active = buffer;
+		// GL.Clear(true, true, Color.clear);
+		// RenderTexture.active = rt;
 	}
 
 }
