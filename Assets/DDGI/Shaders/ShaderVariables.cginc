@@ -6,8 +6,8 @@ struct DDGIVolume
     float3 probeSpacing;
     float3 invProbeSpacing; // 1 / probeSpacing
     int3 phaseOffsets;
-    uint2 invIrradianceTextureSize;
-    uint2 invVisibilityTextureSize;
+    float2 invIrradianceTextureSize;
+    float2 invVisibilityTextureSize;
     // probeOffsetLimit on [0,0.5] where max probe 
     // offset = probeOffsetLimit * probeSpacing
     // Usually 0.4, controllable from GUI.
