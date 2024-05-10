@@ -132,7 +132,7 @@ public class DDGIController : MonoBehaviour
 		if (!isRealtimeRaytracing)
 			return;
 
-		if (!isWriteOnesDone || debugTextureAtPass >= DDGIPass.Borders)
+		if (!isWriteOnesDone || debugTextureAtPass == DDGIPass.Borders)
 		{
 			foreach(DDGIVolume ddgiVolume in ddgiVolumes)
 			{
@@ -321,15 +321,23 @@ public class DDGIController : MonoBehaviour
 
 	private void PrepareDDGIVolumeBuffers(ComputeShader shader)
 	{
-		shader.SetTexture(0, "irradianceTexture", irradianceTexture);
-		shader.SetTexture(0, "visibilityTexture", visibilityTexture);
+        RenderTexture readOnlyIrradiance = RenderTexture.GetTemporary(irradianceTexture.width, irradianceTexture.height, 0, irradianceTexture.format);
+        Graphics.Blit(irradianceTexture, readOnlyIrradiance);
+        RenderTexture readOnlyVisibility = RenderTexture.GetTemporary(visibilityTexture.width, visibilityTexture.height, 0, visibilityTexture.format);
+        Graphics.Blit(visibilityTexture, readOnlyVisibility);
+
+        shader.SetTexture(0, "irradianceTexture", readOnlyIrradiance);
+		shader.SetTexture(0, "visibilityTexture", readOnlyVisibility);
 
 		shader.SetBuffer(0, "probeOffsetsTexture", probeOffsetsTexture);
 		shader.SetVector("probeOffsetsTextureSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
 
 		shader.SetBuffer(0, "probeOffsetsImage", probeOffsetsImage);
 		shader.SetVector("probeOffsetsImageSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
-	}
+
+        RenderTexture.ReleaseTemporary(readOnlyIrradiance);
+        RenderTexture.ReleaseTemporary(readOnlyVisibility);
+    }
 
 	public void UpdateProbes(bool isOutputIrradiance, DebugOutputMode debugOutputMode)
 	{
