@@ -5,10 +5,6 @@
 
 #include "ShaderUtilities.cginc"
 
-Texture2D<float4> probesBuffer;
-SamplerState sampler_probesBuffer;
-uint2 probesBufferSize;
-
 RWTexture2D<float4> Result;
 
 float PROBE_SIDE_LENGTH;
@@ -71,7 +67,7 @@ void mainWriteOnesToBorder(uint3 id : SV_DispatchThreadID)
 
 [numthreads(8,8,1)]
 void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID) 
-{   
+{       
     uint2 texelPos = uint2(id.x, id.y);
 
     bool isAtBorderX, isAtBorderY;
@@ -82,7 +78,7 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
         {
             float2 offsetPos = float2(texelPos.x + PROBE_SIDE_LENGTH * leftOrRight(texelPos.x),
                 texelPos.y + PROBE_SIDE_LENGTH * leftOrRight(texelPos.y));
-            float4 texelToCopy = probesBuffer.SampleLevel(sampler_probesBuffer, offsetPos/probesBufferSize, 0);
+            float4 texelToCopy = Result[uint2(offsetPos)];
 
             Result[texelPos] = texelToCopy;
             #ifdef DEBUG_MODE
@@ -95,7 +91,7 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
         {
             int pos = mirrored(texelPos.y);
             int toAdd = leftOrRight(texelPos.x);
-            float4 texelToCopy = probesBuffer.SampleLevel(sampler_probesBuffer, float2(texelPos.x + toAdd, pos)/probesBufferSize, 0);
+            float4 texelToCopy = Result[uint2(texelPos.x + toAdd, pos)];
 
             Result[texelPos] = texelToCopy;
             #ifdef DEBUG_MODE
@@ -108,7 +104,7 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
         {
             int pos = mirrored(texelPos.x);
             int toAdd = leftOrRight(texelPos.y);
-            float4 texelToCopy = probesBuffer.SampleLevel(sampler_probesBuffer, float2(pos, texelPos.y + toAdd)/probesBufferSize, 0);
+            float4 texelToCopy = Result[uint2(pos, texelPos.y + toAdd)];
 
             Result[texelPos] = texelToCopy;
             #ifdef DEBUG_MODE
@@ -117,10 +113,6 @@ void mainDuplicateProbeEdges(uint3 id : SV_DispatchThreadID)
             return;
         }
     }
-
-    #ifdef DEBUG_MODE
-    debugTex[texelPos] = probesBuffer.SampleLevel(sampler_probesBuffer, texelPos, 0);
-    #endif
 }
 
 

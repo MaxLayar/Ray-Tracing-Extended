@@ -170,8 +170,6 @@ public class DDGIController : MonoBehaviour
 	{
 		(int threadGroupsX, int threadGroupsY) = GetBufferDimensions(probeSideLength, probeCounts);
 
-		computeBorders.SetTexture(kernelIndex, "probesBuffer", probesBuffer);
-		computeBorders.SetVector("probesBufferSize", new Vector4(probesBuffer.width, probesBuffer.height));
 		computeBorders.SetTexture(kernelIndex, "Result", probesBuffer);
 		computeBorders.SetFloat("PROBE_SIDE_LENGTH", probeSideLength);
 
