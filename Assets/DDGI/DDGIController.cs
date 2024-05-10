@@ -57,8 +57,10 @@ public class DDGIController : MonoBehaviour
 		public float 					maxDistance;
 	};
 	[SerializeField] RenderTexture irradianceTexture;
-	[SerializeField] RenderTexture visibilityTexture;
-	[SerializeField] ComputeBuffer probeOffsetsTexture;
+    RenderTexture readOnlyIrradiance;
+    [SerializeField] RenderTexture visibilityTexture;
+    RenderTexture readOnlyVisibility;
+    [SerializeField] ComputeBuffer probeOffsetsTexture;
 	[SerializeField] ComputeBuffer probeOffsetsImage;
 
 	[Space(20), Header("     RayTracing"), Space(5)]
@@ -142,7 +144,7 @@ public class DDGIController : MonoBehaviour
 				RefreshBufferIfNeeded(ref visibilityTexture, "visibilityTexture", v.w, v.h);
 				RefreshBufferIfNeeded(ref irradianceTexture, "irradianceTexture", i.w, i.h);
 
-				probeOffsetsTexture?.Release();
+                probeOffsetsTexture?.Release();
 				probeOffsetsImage?  .Release();
 
 				probeOffsetsTexture = new ComputeBuffer(v.w*v.h,GetStride<Vector4>(), ComputeBufferType.Structured);
@@ -317,13 +319,17 @@ public class DDGIController : MonoBehaviour
         int threadGroupsX = Mathf.CeilToInt(surfelWidth / 8.0f);
         int threadGroupsY = Mathf.CeilToInt(surfelHeight / 8.0f);
         computeRays.Dispatch(0, threadGroupsX, threadGroupsY, 1);
-	}
+
+        RenderTexture.ReleaseTemporary(readOnlyIrradiance);
+        RenderTexture.ReleaseTemporary(readOnlyVisibility);
+    }
 
 	private void PrepareDDGIVolumeBuffers(ComputeShader shader)
-	{
-        RenderTexture readOnlyIrradiance = RenderTexture.GetTemporary(irradianceTexture.width, irradianceTexture.height, 0, irradianceTexture.format);
+    {
+        readOnlyIrradiance = RenderTexture.GetTemporary(irradianceTexture.width, irradianceTexture.height, 0, irradianceTexture.format);
+        readOnlyVisibility = RenderTexture.GetTemporary(visibilityTexture.width, visibilityTexture.height, 0, visibilityTexture.format);
+
         Graphics.Blit(irradianceTexture, readOnlyIrradiance);
-        RenderTexture readOnlyVisibility = RenderTexture.GetTemporary(visibilityTexture.width, visibilityTexture.height, 0, visibilityTexture.format);
         Graphics.Blit(visibilityTexture, readOnlyVisibility);
 
         shader.SetTexture(0, "irradianceTexture", readOnlyIrradiance);
@@ -334,9 +340,6 @@ public class DDGIController : MonoBehaviour
 
 		shader.SetBuffer(0, "probeOffsetsImage", probeOffsetsImage);
 		shader.SetVector("probeOffsetsImageSize", new Vector4(visibilityTexture.width, visibilityTexture.height));
-
-        RenderTexture.ReleaseTemporary(readOnlyIrradiance);
-        RenderTexture.ReleaseTemporary(readOnlyVisibility);
     }
 
 	public void UpdateProbes(bool isOutputIrradiance, DebugOutputMode debugOutputMode)
@@ -385,7 +388,10 @@ public class DDGIController : MonoBehaviour
 
 		// Dispatch your compute shader
 		computeIrradiance.Dispatch(0, Mathf.CeilToInt(bufferSize.w/8), Mathf.CeilToInt(bufferSize.h/8), 1);
-	}
+
+        RenderTexture.ReleaseTemporary(readOnlyIrradiance);
+        RenderTexture.ReleaseTemporary(readOnlyVisibility);
+    }
 
 
 
@@ -721,7 +727,10 @@ public class DDGIController : MonoBehaviour
 			int threadGroupsX = Mathf.CeilToInt(cam.scaledPixelWidth/8.0f);
 			int threadGroupsY = Mathf.CeilToInt(cam.scaledPixelHeight/8.0f);
 			raytracedDDGIShader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
-		}
+
+            RenderTexture.ReleaseTemporary(readOnlyIrradiance);
+            RenderTexture.ReleaseTemporary(readOnlyVisibility);
+        }
 	}
 
 
