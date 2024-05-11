@@ -1,13 +1,13 @@
 struct DDGIVolume
 {
-    int3 probeCounts;
+    uint3 probeCounts;
     int3 logProbeCounts;
     float3 probeGridOrigin;
     float3 probeSpacing;
     float3 invProbeSpacing; // 1 / probeSpacing
     int3 phaseOffsets;
-    uint2 invIrradianceTextureSize;
-    uint2 invVisibilityTextureSize;
+    float2 invIrradianceTextureSize;
+    float2 invVisibilityTextureSize;
     // probeOffsetLimit on [0,0.5] where max probe 
     // offset = probeOffsetLimit * probeSpacing
     // Usually 0.4, controllable from GUI.
@@ -33,11 +33,16 @@ struct DDGIVolume
 
 StructuredBuffer<DDGIVolume> DDGIVolumes;
 
-RWStructuredBuffer<float4> irradianceTexture;
-int2 irradianceTextureSize;
-RWStructuredBuffer<float4> visibilityTexture;
-int2 visibilityTextureSize;
+Texture2D<float4> irradianceTexture;
+SamplerState sampler_irradianceTexture;
+
+Texture2D<float4> visibilityTexture;
+SamplerState sampler_visibilityTexture;
+
+RWTexture2D<float4> Result;
+
 RWStructuredBuffer<float4> probeOffsetsTexture;
-int2 probeOffsetsTextureSize;
+uint2 probeOffsetsTextureSize;
+
 RWStructuredBuffer<float4> probeOffsetsImage;
-int2 probeOffsetsImageSize;
+uint2 probeOffsetsImageSize;

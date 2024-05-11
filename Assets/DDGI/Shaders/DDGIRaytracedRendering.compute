@@ -10,10 +10,6 @@
 #include "SampleIrradianceField.cginc"
 #include "RayTraceUtilities.cginc"
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWTexture2D<float4> Result;
-
 // Camera parameters
 float4x4 _CameraLocalToWorld;
 float3 ViewParams;

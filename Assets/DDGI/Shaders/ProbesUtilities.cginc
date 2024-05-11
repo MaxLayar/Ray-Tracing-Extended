@@ -1,10 +1,10 @@
 int PROBE_SIDE_LENGTH;
 
-int texelToIndex(float2 texelXY, uint width) 
+int texelToIndex(float2 texelXY, float width) 
 {
     int probeWithBorderSide = PROBE_SIDE_LENGTH + 2;
-    int probesPerSide = width / probeWithBorderSide;
-    return int(texelXY.x / probeWithBorderSide) + probesPerSide * int(texelXY.y / probeWithBorderSide);
+    float probesPerSide = width / probeWithBorderSide;
+    return floor(texelXY.x / probeWithBorderSide) + probesPerSide * floor(texelXY.y / probeWithBorderSide);
 }
 
 /** 
