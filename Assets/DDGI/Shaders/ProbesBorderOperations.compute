@@ -57,7 +57,7 @@ void mainWriteOnesToBorder(uint3 id : SV_DispatchThreadID)
     uint2 texelPos = uint2(id.x, id.y);
 
     bool _;
-    float4 val = float4(1,1,1,1) * isAtProbeBorder(texelPos,_,_);
+    float4 val = float4(0, 0, 0, 0); //float4(1, 1, 1, 1) * isAtProbeBorder(texelPos, _, _);
     Result[texelPos] = val;
 
 #ifdef DEBUG_MODE
